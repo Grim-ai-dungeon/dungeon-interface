@@ -140,6 +140,24 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
           const kc = roomCenter(kevinRoom);
           ps.emitSpark(kc.cx, kc.cy + 5, '#FF6633', 2);
         }
+
+        // Bob research particles (blue magic) when active
+        const bobAgent = agents.find(a => a.id === 'bob');
+        if (bobAgent?.status === 'active') {
+          const bobRoom = ROOMS.find(r => r.id === 'bob')!;
+          const bc = roomCenter(bobRoom);
+          if (Math.random() < 0.5) ps.emitMagic(bc.cx, bc.cy - 10, 20, '#99CCFF', 1);
+          if (Math.random() < 0.2) ps.emitDust(bc.cx - 8, bc.cy - 12, 16, 8, 1);
+        }
+
+        // Stuart gold coin sparks when active
+        const stuartAgent = agents.find(a => a.id === 'stuart');
+        if (stuartAgent?.status === 'active') {
+          const stuartRoom = ROOMS.find(r => r.id === 'stuart')!;
+          const sc = roomCenter(stuartRoom);
+          if (Math.random() < 0.45) ps.emitSpark(sc.cx, sc.cy + 8, '#FFD700', 1);
+          if (Math.random() < 0.25) ps.emitMagic(sc.cx, sc.cy + 5, 18, '#FFD700', 1);
+        }
       }
 
       ps.update(now);
@@ -198,6 +216,11 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
 
         // Label
         drawRoomLabel(ctx, room.id, px, py, w, h, isSelected, isHovered, glowColor, now);
+
+        // Task ticker — show current task when agent is active
+        if (isActive && agent?.currentTask) {
+          drawTaskTicker(ctx, agent.currentTask, px, py, w, h, glowColor, now);
+        }
       }
 
       // ── 5. Torch sprites ──────────────────────────────────────────────────
@@ -318,6 +341,69 @@ function drawRoomLabel(
   }
 
   ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ─── Task ticker — animated task label shown inside active rooms ─────────────
+
+function drawTaskTicker(
+  ctx: CanvasRenderingContext2D,
+  task: string,
+  px: number, py: number, w: number, h: number,
+  color: string,
+  now: number,
+): void {
+  // Positioned just above the room label (label is at py+h-12)
+  const barY = py + h - 26;
+  const barH = 11;
+  const barX = px + 4;
+  const barW = w - 8;
+
+  ctx.save();
+
+  // Pulsing background
+  const pulse = 0.5 + Math.sin(now / 600) * 0.18;
+  const [r, g, b] = hexToRGB(color);
+  ctx.fillStyle = `rgba(${r},${g},${b},${pulse * 0.18})`;
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, 2);
+  ctx.fill();
+
+  // Glowing border pulse
+  ctx.strokeStyle = `rgba(${r},${g},${b},${pulse * 0.5})`;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, 2);
+  ctx.stroke();
+
+  // Spinning indicator dot on left side
+  const dotAngle = now / 600;
+  const dotX = barX + 5.5;
+  const dotY = barY + barH / 2;
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.6 + Math.sin(dotAngle) * 0.4})`;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Task text — truncate to fit available width
+  const maxW = barW - 18;
+  ctx.font = '6px \'Courier New\', monospace';
+  const fullText = task.toUpperCase();
+  let displayText = fullText;
+  while (ctx.measureText(displayText).width > maxW && displayText.length > 0) {
+    displayText = displayText.slice(0, -1);
+  }
+  if (displayText.length < fullText.length) {
+    displayText = displayText.slice(0, -2) + '..';
+  }
+
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.75 + Math.sin(now / 800) * 0.15})`;
+  ctx.textAlign = 'left';
+  ctx.fillText(displayText, barX + 11, barY + barH / 2 + 2);
+
   ctx.restore();
 }
 

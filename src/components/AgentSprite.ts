@@ -534,33 +534,78 @@ function drawSleepIndicator(ctx: CanvasRenderingContext2D, cx: number, cy: numbe
 function drawActivityAura(ctx: CanvasRenderingContext2D, cx: number, cy: number, now: number, _color: string): void {
   const pulse = 0.5 + Math.sin(now / 400) * 0.3;
   ctx.save();
-  const grad = ctx.createRadialGradient(cx, cy + 10, 5, cx, cy + 10, 26);
+
+  // Larger, more visible ground glow
+  const grad = ctx.createRadialGradient(cx, cy + 10, 4, cx, cy + 10, 36);
   grad.addColorStop(0, `rgba(255,200,50,0)`);
-  grad.addColorStop(0.5, `rgba(255,200,50,${pulse * 0.15})`);
+  grad.addColorStop(0.4, `rgba(255,200,50,${pulse * 0.22})`);
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.ellipse(cx, cy + 10, 26, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 10, 36, 14, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // Spinning work ring — shows the agent is actively processing
+  const ringAngle = now / 1200;
+  ctx.strokeStyle = `rgba(255, 200, 60, ${0.45 + Math.sin(now / 400) * 0.25})`;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 6;
+  ctx.setLineDash([5, 7]);
+  ctx.lineDashOffset = -(now / 40) % 12;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 30, ringAngle, ringAngle + Math.PI * 1.6);
+  ctx.stroke();
+
+  // Second counter-rotating arc
+  ctx.strokeStyle = `rgba(255, 160, 30, ${0.25 + Math.sin(now / 600) * 0.15})`;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([3, 11]);
+  ctx.lineDashOffset = (now / 55) % 14;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 33, -ringAngle * 0.7, -ringAngle * 0.7 + Math.PI * 1.2);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
 function drawActivitySparks(ctx: CanvasRenderingContext2D, cx: number, cy: number, now: number): void {
   ctx.save();
-  for (let i = 0; i < 6; i++) {
-    const angle = (now / 350 + i * ((Math.PI * 2) / 6)) % (Math.PI * 2);
-    const r = 20 + Math.sin(now / 200 + i * 1.3) * 5;
+  // More sparks in a wider, more visible elliptical orbit
+  for (let i = 0; i < 8; i++) {
+    const angle = (now / 320 + i * ((Math.PI * 2) / 8)) % (Math.PI * 2);
+    const r = 22 + Math.sin(now / 180 + i * 1.3) * 6;
     const sx = cx + Math.cos(angle) * r;
-    const sy = cy + Math.sin(angle) * r * 0.5 + 2; // elliptical orbit
-    const alpha = 0.5 + Math.sin(now / 180 + i * 0.7) * 0.4;
+    const sy = cy + Math.sin(angle) * r * 0.55 + 2;
+    const alpha = 0.55 + Math.sin(now / 160 + i * 0.7) * 0.4;
+    const size = 1.5 + Math.sin(now / 220 + i) * 0.7;
     ctx.fillStyle = `rgba(255, 210, 60, ${alpha})`;
     ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 5;
     ctx.beginPath();
-    ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
+    ctx.arc(sx, sy, size, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.shadowBlur = 0;
+
+  // WORKING status badge above the sprite
+  const textPulse = 0.7 + Math.sin(now / 500) * 0.3;
+  ctx.globalAlpha = textPulse;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.beginPath();
+  ctx.roundRect(cx - 18, cy - 40, 36, 10, 2);
+  ctx.fill();
+  ctx.fillStyle = '#44ff88';
+  ctx.shadowColor = '#44ff88';
+  ctx.shadowBlur = 6;
+  ctx.font = 'bold 6px \'Courier New\', monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('● ACTIVE', cx, cy - 32);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+
   ctx.restore();
 }
 

@@ -1,28 +1,37 @@
-name: Build Windows App
-on: [push]
+name: Build & Release Windows App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-          
+
       - name: Install frontend dependencies
         run: npm install
-        
+
       - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # This builds the app and uploads the bundles as GitHub Actions workflow artifacts
-          uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: 'Dungeon-Interface-[platform]-[arch]'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Dungeon Interface ${{ github.ref_name }}'
+          releaseBody: '🏰 The Overlord commands it. Download the .msi or .exe below.'
+          releaseDraft: false
+          prerelease: false

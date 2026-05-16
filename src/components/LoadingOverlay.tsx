@@ -1,148 +1,62 @@
-import { useEffect, useState } from 'react';
-import { useTheme } from '../ThemeContext';
+// ─── LoadingOverlay.tsx — Dungeon-themed loading screen ─────────────────────
 
-// ─── Loading Overlay ─────────────────────────────────────────────────────────
-// Shows "INITIALIZING DUNGEON..." animation before the main UI renders.
+import { useState, useEffect } from 'react';
 
-const BOOT_SEQUENCE = [
-  'LOADING DUNGEON KERNEL...',
-  'INITIALIZING ISOMETRIC RENDERER...',
-  'CONNECTING TO OPENCLAW API...',
-  'DEPLOYING MINION AGENTS...',
-  'CALIBRATING GRIM SUBSYSTEM...',
-  'DUNGEON ONLINE. WELCOME, OVERLORD.',
-];
-
-interface LoadingOverlayProps {
+interface Props {
   onComplete: () => void;
 }
 
-export function LoadingOverlay({ onComplete }: LoadingOverlayProps) {
-  const { theme } = useTheme();
-  const [lineIndex, setLineIndex] = useState(0);
+const BOOT_LINES = [
+  '🔥 Lighting dungeon torches...',
+  '📜 Consulting the ancient scrolls...',
+  '⚔️  Arming the minions...',
+  '🗝️  Unlocking vault chambers...',
+  '🐉 Summoning Grim, Dungeon Master...',
+  '✅ Dungeon Interface ready.',
+];
+
+export function LoadingOverlay({ onComplete }: Props) {
+  const [lines, setLines] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // Advance boot lines
-    const lineInterval = setInterval(() => {
-      setLineIndex((prev) => {
-        const next = prev + 1;
-        if (next >= BOOT_SEQUENCE.length) {
-          clearInterval(lineInterval);
-          // Brief pause then fade out
-          setTimeout(() => {
-            setFading(true);
-            setTimeout(onComplete, 400);
-          }, 500);
-        }
-        return next;
-      });
+    let lineIdx = 0;
+    const interval = setInterval(() => {
+      if (lineIdx < BOOT_LINES.length) {
+        setLines(prev => [...prev, BOOT_LINES[lineIdx]]);
+        setProgress(Math.round(((lineIdx + 1) / BOOT_LINES.length) * 100));
+        lineIdx++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          setDone(true);
+          setTimeout(onComplete, 400);
+        }, 300);
+      }
     }, 280);
 
-    // Smooth progress bar
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          return 100;
-        }
-        return prev + 1.6;
-      });
-    }, 30);
-
-    return () => {
-      clearInterval(lineInterval);
-      clearInterval(progressInterval);
-    };
+    return () => clearInterval(interval);
   }, [onComplete]);
 
   return (
-    <div
-      className="loading-overlay"
-      style={{
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 0.4s ease',
-        background: theme.colors.bgDeep,
-      }}
-    >
-      {/* Corner decorations */}
-      <div className="loading-corner loading-corner--tl" style={{ borderColor: theme.colors.primary }} />
-      <div className="loading-corner loading-corner--tr" style={{ borderColor: theme.colors.primary }} />
-      <div className="loading-corner loading-corner--bl" style={{ borderColor: theme.colors.primary }} />
-      <div className="loading-corner loading-corner--br" style={{ borderColor: theme.colors.primary }} />
-
+    <div className={`loading-overlay${done ? ' loading-overlay--fade' : ''}`}>
       <div className="loading-content">
-        {/* Main icon */}
-        <div
-          className="loading-dragon"
-          style={{ filter: `drop-shadow(0 0 20px ${theme.colors.secondary}) drop-shadow(0 0 40px ${theme.colors.secondary}88)` }}
-        >
-          🐉
-        </div>
+        <div className="loading-dragon">🐉</div>
+        <div className="loading-title">THE OVERLORD'S DUNGEON</div>
+        <div className="loading-subtitle">DUNGEON INTERFACE v2 — INITIALIZING</div>
 
-        {/* Title */}
-        <div
-          className="loading-title"
-          style={{
-            color: theme.colors.secondary,
-            textShadow: `0 0 30px ${theme.colors.secondary}, 0 0 60px ${theme.colors.secondary}55`,
-            fontFamily: theme.fontTitle,
-          }}
-        >
-          DUNGEON INTERFACE
-        </div>
-        <div
-          className="loading-subtitle"
-          style={{ color: theme.colors.textDim, fontFamily: theme.fontMono }}
-        >
-          GRIM — DUNGEON MASTER COMMAND CONSOLE v2.0
-        </div>
-
-        {/* Boot log */}
-        <div
-          className="loading-log"
-          style={{
-            borderColor: theme.colors.borderPrimary,
-            background: `${theme.colors.bgPanel}ee`,
-            fontFamily: theme.fontMono,
-          }}
-        >
-          {BOOT_SEQUENCE.slice(0, lineIndex + 1).map((line, i) => (
-            <div
-              key={i}
-              className={`loading-log-line ${i === lineIndex ? 'loading-log-line--active' : ''}`}
-              style={{
-                color: i === lineIndex ? theme.colors.primary : theme.colors.textDimmer,
-              }}
-            >
-              <span style={{ color: theme.colors.textDimmer, marginRight: 8 }}>
-                {String(i).padStart(2, '0')}&gt;
-              </span>
-              {line}
-              {i === lineIndex && <span className="loading-cursor" style={{ background: theme.colors.primary }} />}
-            </div>
+        <div className="loading-log">
+          {lines.map((line, i) => (
+            <div key={i} className="loading-log-line">{line}</div>
           ))}
+          {!done && <span className="loading-cursor" />}
         </div>
 
-        {/* Progress bar */}
-        <div className="loading-progress-wrap" style={{ borderColor: theme.colors.borderPrimary }}>
-          <div
-            className="loading-progress-fill"
-            style={{
-              width: `${Math.min(progress, 100)}%`,
-              background: `linear-gradient(90deg, ${theme.colors.primaryDim}, ${theme.colors.primary})`,
-              boxShadow: `0 0 12px ${theme.colors.primary}88`,
-            }}
-          />
+        <div className="loading-bar-wrap">
+          <div className="loading-bar-fill" style={{ width: `${progress}%` }} />
         </div>
-
-        <div
-          className="loading-pct"
-          style={{ color: theme.colors.textDim, fontFamily: theme.fontMono }}
-        >
-          {Math.min(Math.floor(progress), 100).toString().padStart(3, '0')}%
-        </div>
+        <div className="loading-pct">{progress}%</div>
       </div>
     </div>
   );

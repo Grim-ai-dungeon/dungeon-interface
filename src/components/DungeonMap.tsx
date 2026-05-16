@@ -1,6 +1,6 @@
 // ─── DungeonMap.tsx — Canvas-based 2D top-down dungeon ───────────────────────
 
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import type { AgentId, AgentInfo } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds, GRID_COLS, GRID_ROWS } from '../dungeon/rooms';
 import { TILE_SIZE, drawFloorTile, drawWallTile, drawRoomBorder, drawCorridorFloor } from '../dungeon/tiles';
@@ -8,12 +8,20 @@ import { getRoomTorches, getCorridorTorches, drawTorchSprite, applyLighting, gen
 import { ParticleSystem } from '../dungeon/particles';
 import { drawAgentSprite } from './AgentSprite';
 import { CorridorMessenger } from '../dungeon/corridorMessenger';
+import { EventPulseSystem } from '../dungeon/eventPulse';
+import type { PulseKind } from '../dungeon/eventPulse';
+
+export interface PulseHandle {
+  fire: (agentId: AgentId, kind: PulseKind) => void;
+}
 
 interface Props {
   agents: AgentInfo[];
   selectedId: AgentId | null;
   onRoomClick: (id: AgentId) => void;
   onRoomHover: (id: AgentId | null) => void;
+  /** Optional imperative handle — caller can use this to fire pulses directly */
+  pulseHandleRef?: React.MutableRefObject<PulseHandle | null>;
 }
 
 const ROOM_LABEL_COLORS: Record<string, string> = {
@@ -30,7 +38,7 @@ const ROOM_LABELS: Record<string, string> = {
   stuart: "TREASURY",
 };
 
-export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Props) {
+export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulseHandleRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
   const hoveredIdRef = useRef<AgentId | null>(null);
@@ -38,6 +46,17 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
   const messengerRef = useRef<CorridorMessenger>(new CorridorMessenger());
   const lastSparkRef = useRef<number>(0);
   const lastDustRef = useRef<number>(0);
+  const eventPulseRef = useRef<EventPulseSystem>(new EventPulseSystem());
+  const prevTasksRef = useRef<Partial<Record<AgentId, string | undefined>>>({});
+
+  // ── Expose imperative pulse handle ─────────────────────────────────────────
+  useEffect(() => {
+    if (pulseHandleRef) {
+      pulseHandleRef.current = {
+        fire: (agentId, kind) => eventPulseRef.current.fire(agentId, kind),
+      };
+    }
+  }, [pulseHandleRef]);
 
   // Precompute torch array and torch-to-room mapping (stable references)
   const allTorches = useMemo(() => [...ROOMS.flatMap(r => getRoomTorches(r)), ...getCorridorTorches()], []);
@@ -250,6 +269,21 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
       // ── 6b. Corridor messenger orbs ──────────────────────────────────────────
       messengerRef.current.update(now);
       messengerRef.current.draw(ctx);
+
+      // ── 6c. Event pulse system ────────────────────────────────────────────────
+      // Detect task changes on each frame tick and auto-fire pulses.
+      // Also handles imperative calls from App via pulseHandleRef.
+      for (const agent of agents) {
+        const prev = prevTasksRef.current[agent.id];
+        if (prev !== undefined && prev !== agent.currentTask) {
+          // Task changed — fire a report pulse (minion → Grim) or dispatch from Grim
+          const kind = agent.id === 'grim' ? 'dispatch' : 'report';
+          eventPulseRef.current.fire(agent.id, kind);
+        }
+        prevTasksRef.current[agent.id] = agent.currentTask;
+      }
+      eventPulseRef.current.update(now);
+      eventPulseRef.current.draw(ctx, now);
 
       // ── 7. Fog of war + torch lighting ───────────────────────────────────
       const activeSet = new Set(agents.filter(a => a.status === 'active').map(a => a.id));

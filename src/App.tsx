@@ -1,8 +1,9 @@
 // ─── App.tsx — Dungeon Interface v2 ──────────────────────────────────────────
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import { DungeonMap } from './components/DungeonMap';
+import type { PulseHandle } from './components/DungeonMap';
 import { SidePanel } from './components/SidePanel';
 import { DungeonHUD } from './components/DungeonHUD';
 import { ActivityLog } from './components/ActivityLog';
@@ -146,6 +147,7 @@ function App() {
   const [selectedId, setSelectedId] = useState<AgentId | null>(null);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const pulseHandleRef = useRef<PulseHandle | null>(null);
 
   const dismissToast = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -199,6 +201,11 @@ function App() {
             activityLog: [...a.activityLog.slice(-19), newLogEntry],
           };
         }));
+
+        // Fire a Grim→minion dispatch pulse just before task lands
+        if (agentId !== 'grim' && pulseHandleRef.current) {
+          pulseHandleRef.current.fire('grim', 'dispatch');
+        }
 
         addLog(agentId, entry.log, entry.type);
 
@@ -275,6 +282,13 @@ function App() {
   const handleRoomClick = useCallback((id: AgentId) => {
     setSelectedId(prev => (prev === id ? null : id));
     addLog(id, `Chamber accessed by the Overlord.`, 'info');
+    // Flash a dispatch pulse from Grim toward the clicked room
+    if (pulseHandleRef.current) {
+      pulseHandleRef.current.fire('grim', 'dispatch');
+      setTimeout(() => {
+        if (pulseHandleRef.current) pulseHandleRef.current.fire(id, 'dispatch');
+      }, 180);
+    }
   }, [addLog]);
 
   // ── Command send ────────────────────────────────────────────────────────────
@@ -292,6 +306,13 @@ function App() {
       };
       return { ...a, activityLog: [...a.activityLog.slice(-19), newEntry] };
     }));
+    // Pulse: Grim dispatch → minion
+    if (pulseHandleRef.current) {
+      pulseHandleRef.current.fire('grim', 'dispatch');
+      setTimeout(() => {
+        if (pulseHandleRef.current) pulseHandleRef.current.fire(agentId, 'dispatch');
+      }, 250);
+    }
   }, [addLog, addToast]);
 
   // ── Close panel ─────────────────────────────────────────────────────────────
@@ -319,6 +340,7 @@ function App() {
                 selectedId={selectedId}
                 onRoomClick={handleRoomClick}
                 onRoomHover={handleHover}
+                pulseHandleRef={pulseHandleRef}
               />
             </div>
           </div>

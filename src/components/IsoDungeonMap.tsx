@@ -661,19 +661,52 @@ export function IsoDungeonMap({
         emojiText.position.set(x, y - 8);
         labelContainer.addChild(emojiText);
 
-        // Room name label
+        // Room name label — styled badge below the block
+        const labelY = y + ISO_H / 2 + 40;
+        const labelText = room.label;
+
+        // Approximate text width for Share Tech Mono at fontSize 9
+        const approxTextW = labelText.length * 6.4;
+        const padX = 10;
+        const bgW = approxTextW + padX * 2;
+        const bgH = 16;
+
+        // Background badge with border and corner ticks
+        const labelBg = new PIXI.Graphics();
+        // Glow halo
+        labelBg.rect(x - bgW / 2 - 2, labelY - bgH / 2 - 2, bgW + 4, bgH + 4);
+        labelBg.fill({ color: roomGlowColor, alpha: 0.1 });
+        // Dark fill
+        labelBg.rect(x - bgW / 2, labelY - bgH / 2, bgW, bgH);
+        labelBg.fill({ color: 0x000000, alpha: 0.82 });
+        // Border
+        labelBg.rect(x - bgW / 2, labelY - bgH / 2, bgW, bgH);
+        labelBg.stroke({ color: roomGlowColor, width: 1, alpha: 0.65 });
+        // Corner ticks (top-left)
+        const tk = 5;
+        labelBg.moveTo(x - bgW / 2, labelY - bgH / 2 + tk);
+        labelBg.lineTo(x - bgW / 2, labelY - bgH / 2);
+        labelBg.lineTo(x - bgW / 2 + tk, labelY - bgH / 2);
+        labelBg.stroke({ color: roomGlowColor, width: 1.5, alpha: 0.9 });
+        // Corner ticks (top-right)
+        labelBg.moveTo(x + bgW / 2 - tk, labelY - bgH / 2);
+        labelBg.lineTo(x + bgW / 2, labelY - bgH / 2);
+        labelBg.lineTo(x + bgW / 2, labelY - bgH / 2 + tk);
+        labelBg.stroke({ color: roomGlowColor, width: 1.5, alpha: 0.9 });
+        labelContainer.addChild(labelBg);
+
         const nameText = new PIXI.Text({
-          text: room.label,
+          text: labelText,
           style: {
-            fontSize: 8,
+            fontSize: 9,
             fill: roomGlowColor,
             fontFamily: 'Share Tech Mono, monospace',
-            letterSpacing: 1,
+            letterSpacing: 1.5,
             align: 'center',
           },
         });
-        nameText.anchor.set(0.5, 0);
-        nameText.position.set(x, y + ISO_H / 2 + 32);
+        nameText.anchor.set(0.5, 0.5);
+        nameText.position.set(x, labelY);
         labelContainer.addChild(nameText);
 
         // Invisible click hit area

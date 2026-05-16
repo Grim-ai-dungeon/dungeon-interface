@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { IsoDungeonMap } from './components/IsoDungeonMap';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { LoadingOverlay } from './components/LoadingOverlay';
 import { useTheme } from './ThemeContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ const ROOM_INFO: Record<string, {
   abilities: string[];
   status: string;
   active: boolean;
-  agentKey?: string; // maps to OpenClaw agent id
+  agentKey?: string;
 }> = {
   grim: {
     emoji: '🐉',
@@ -111,6 +112,19 @@ const ROOM_INFO: Record<string, {
   },
 };
 
+// ─── Agent emoji mapping ───────────────────────────────────────────────────────
+
+function getAgentEmoji(name: string, status: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('grim') || n.includes('main')) return '🐉';
+  if (n.includes('bob')) return '🔍';
+  if (n.includes('kevin')) return '🔧';
+  if (n.includes('screen')) return '📺';
+  if (status === 'active') return '⚡';
+  if (status === 'error') return '💀';
+  return '👾';
+}
+
 // ─── StatBar ──────────────────────────────────────────────────────────────────
 
 function StatBar({ label, value, color }: { label: string; value: number; color: string }) {
@@ -153,29 +167,111 @@ function LiveClock() {
 function AgentStatusPanel({ agents }: { agents: AgentInfo[] }) {
   const { theme } = useTheme();
   if (!agents.length) return null;
+
+  function getStatusColor(status: string): string {
+    if (status === 'active') return theme.colors.statusGreen;
+    if (status === 'error') return theme.colors.statusRed;
+    return theme.colors.statusOrange; // idle / unknown
+  }
+
+  function getStatusLabel(status: string): string {
+    if (status === 'active') return 'ACTIVE';
+    if (status === 'error') return 'ERROR';
+    return 'IDLE';
+  }
+
+  function formatLastActivity(ts?: string): string {
+    if (!ts) return '—';
+    // If already formatted (HH:MM:SS), return as is
+    if (/^\d{2}:\d{2}/.test(ts)) return ts;
+    try {
+      return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return ts;
+    }
+  }
+
   return (
-    <div className="agent-live-panel">
-      <div className="panel-label">⬡ LIVE AGENTS</div>
-      {agents.map((a) => (
-        <div key={a.id} className="agent-live-row">
-          <span
-            className="status-dot"
-            style={{
-              background: a.status === 'active' ? theme.colors.statusGreen : theme.colors.secondary,
-              boxShadow: `0 0 5px ${a.status === 'active' ? theme.colors.statusGreen : theme.colors.secondary}`,
-            }}
-          />
-          <div className="agent-live-info">
-            <span className="agent-live-name">{a.name.toUpperCase()}</span>
-            {a.currentTask && (
-              <span className="agent-live-task">{a.currentTask.slice(0, 38)}{a.currentTask.length > 38 ? '…' : ''}</span>
-            )}
-            {a.lastActivity && (
-              <span className="agent-live-activity">{a.lastActivity}</span>
-            )}
-          </div>
+    <div
+      className="agent-live-panel"
+      style={{ borderColor: theme.colors.borderPrimary }}
+    >
+      {/* Panel header */}
+      <div className="panel-header">
+        <div className="panel-header-bar" style={{ background: theme.colors.primary }} />
+        <span className="panel-label" style={{ color: theme.colors.textDim }}>
+          ◈ LIVE AGENT STATUS
+        </span>
+        <div className="panel-agent-count" style={{ color: theme.colors.textDimmer }}>
+          {agents.length} UNIT{agents.length !== 1 ? 'S' : ''}
         </div>
-      ))}
+      </div>
+
+      {/* Divider */}
+      <div className="panel-divider" style={{ background: theme.colors.borderPrimary }} />
+
+      {/* Agent rows */}
+      <div className="agent-status-list">
+        {agents.map((a, idx) => {
+          const statusColor = getStatusColor(a.status);
+          const emoji = getAgentEmoji(a.name, a.status);
+          const taskText = a.currentTask
+            ? (a.currentTask.length > 34 ? a.currentTask.slice(0, 34) + '…' : a.currentTask)
+            : null;
+
+          return (
+            <div
+              key={a.id}
+              className={`agent-status-row ${idx < agents.length - 1 ? 'agent-status-row--bordered' : ''}`}
+              style={{ borderColor: `${theme.colors.borderPrimary}` }}
+            >
+              {/* Left: emoji + status dot */}
+              <div className="agent-row-left">
+                <span className="agent-row-emoji">{emoji}</span>
+                <span
+                  className="status-dot agent-row-dot"
+                  style={{ background: statusColor, boxShadow: `0 0 6px ${statusColor}` }}
+                />
+              </div>
+
+              {/* Center: name + task */}
+              <div className="agent-row-center">
+                <div className="agent-row-name" style={{ color: theme.colors.primary }}>
+                  {a.name.toUpperCase()}
+                </div>
+                {taskText && (
+                  <div className="agent-row-task" style={{ color: theme.colors.textDim }}>
+                    {taskText}
+                  </div>
+                )}
+                {!taskText && (
+                  <div className="agent-row-task" style={{ color: theme.colors.textDimmer }}>
+                    awaiting orders...
+                  </div>
+                )}
+              </div>
+
+              {/* Right: status + time */}
+              <div className="agent-row-right">
+                <span
+                  className="agent-row-status-badge"
+                  style={{ color: statusColor, borderColor: `${statusColor}55`, background: `${statusColor}11` }}
+                >
+                  {getStatusLabel(a.status)}
+                </span>
+                {a.lastActivity && (
+                  <span className="agent-row-time" style={{ color: theme.colors.textDimmer }}>
+                    {formatLastActivity(a.lastActivity)}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer scanline */}
+      <div className="panel-footer-scan" style={{ background: `linear-gradient(90deg, transparent, ${theme.colors.primary}22, transparent)` }} />
     </div>
   );
 }
@@ -190,6 +286,7 @@ function App() {
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [liveAgents, setLiveAgents] = useState<AgentInfo[]>([]);
   const [agentActiveMap, setAgentActiveMap] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(true);
   const room = ROOM_INFO[selectedRoom] ?? ROOM_INFO.grim;
 
   // Map agent keys to room IDs for glow/pulse
@@ -238,13 +335,11 @@ function App() {
 
     const fetchAgents = async () => {
       try {
-        // Try to get sessions/agents list
         const res = await fetch('http://localhost:18789/api/v1/sessions', {
           signal: AbortSignal.timeout(3000),
         });
         if (res.ok) {
           const data = await res.json();
-          // Normalize response — OpenClaw may return array or object with sessions key
           const sessions: any[] = Array.isArray(data) ? data : (data.sessions ?? data.agents ?? []);
           const agents: AgentInfo[] = sessions.map((s: any) => ({
             id: s.id ?? s.name ?? 'unknown',
@@ -260,7 +355,6 @@ function App() {
             const newMap = buildActiveMap(agents);
             setAgentActiveMap(newMap);
 
-            // Log any newly active agents
             agents.forEach((a) => {
               if (a.status === 'active' && a.currentTask) {
                 addLog(a.name.toUpperCase(), `Active: ${a.currentTask.slice(0, 60)}`, 'info');
@@ -322,144 +416,176 @@ function App() {
   const isRoomActive = agentActiveMap[selectedRoom] ?? room.active;
 
   return (
-    <div className="dungeon-root">
-      {/* Scan line */}
-      {theme.scanLineStyle !== 'none' && <div className={`scan-line scan-line--${theme.scanLineStyle}`} />}
-      {/* Grid background */}
-      <div className="dungeon-bg-grid" />
-      <div className="dungeon-bg-vignette" />
+    <>
+      {/* ── Loading overlay ─────────────────────────────────────────────── */}
+      {isLoading && <LoadingOverlay onComplete={() => setIsLoading(false)} />}
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="dungeon-header">
-        <div className="header-left">
-          <span className="header-dragon">🐉</span>
-          <div>
-            <div className="header-title">DUNGEON INTERFACE</div>
-            <div className="header-sub">GRIM — DUNGEON MASTER COMMAND CONSOLE v2.0</div>
-          </div>
-        </div>
-        <div className="header-right">
-          <ThemeSwitcher />
-          <div className="oc-status">
-            <span
-              className="status-dot"
-              style={{ background: ocColor, boxShadow: `0 0 6px ${ocColor}` }}
-            />
-            <span style={{ color: ocColor, fontSize: 9, letterSpacing: '0.08em' }}>
-              OPENCLAW {ocStatus.toUpperCase()}
-            </span>
-          </div>
-          <div className="header-time"><LiveClock /></div>
-        </div>
-      </header>
+      {/* ── Main app (rendered behind loading overlay) ───────────────────── */}
+      <div className={`dungeon-root ${isLoading ? 'dungeon-root--loading' : 'dungeon-root--ready'}`}>
+        {/* Scan line */}
+        {theme.scanLineStyle !== 'none' && <div className={`scan-line scan-line--${theme.scanLineStyle}`} />}
+        {/* Grid background */}
+        <div className="dungeon-bg-grid" />
+        <div className="dungeon-bg-vignette" />
 
-      {/* ── Main layout ────────────────────────────────────────────────────── */}
-      <div className="dungeon-main">
-        {/* Left: Agent panel */}
-        <aside className="dungeon-sidebar">
-          <div className="agent-card" style={{ '--accent': room.color } as React.CSSProperties}>
-            <div className="agent-card-top">
-              <div className="agent-emoji">{room.emoji}</div>
-              <div>
-                <div className="agent-name" style={{ color: room.color }}>{room.agent}</div>
-                <div className="agent-title">{room.title}</div>
-                <div className="agent-model">⚙ {room.model}</div>
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <header className="dungeon-header">
+          {/* Left: dragon + title */}
+          <div className="header-left">
+            <span className="header-dragon">🐉</span>
+            <div>
+              <div
+                className="header-title"
+                style={{
+                  color: theme.colors.secondary,
+                  textShadow: `0 0 20px ${theme.colors.secondary}, 0 0 40px ${theme.colors.secondary}55`,
+                }}
+              >
+                DUNGEON INTERFACE
+              </div>
+              <div className="header-sub">
+                GRIM — DUNGEON MASTER COMMAND CONSOLE v2.0
               </div>
             </div>
+          </div>
 
-            <div className="agent-status">
+          {/* Right: theme switcher + status + clock */}
+          <div className="header-right">
+            {/* Theme switcher */}
+            <ThemeSwitcher />
+
+            {/* OpenClaw connection status */}
+            <div className="oc-status" style={{ borderColor: `${ocColor}44` }}>
               <span
                 className="status-dot"
-                style={{
-                  background: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary,
-                  boxShadow: `0 0 6px ${isRoomActive ? theme.colors.statusGreen : theme.colors.secondary}`,
-                }}
+                style={{ background: ocColor, boxShadow: `0 0 6px ${ocColor}` }}
               />
-              <span style={{ fontSize: 9, color: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary, letterSpacing: '0.06em' }}>
-                {room.status}
+              <span style={{ color: ocColor, fontSize: 9, letterSpacing: '0.08em' }}>
+                OPENCLAW {ocStatus.toUpperCase()}
               </span>
             </div>
 
-            <div className="agent-stats">
-              {room.stats.map((s) => (
-                <StatBar key={s.label} label={s.label} value={s.value} color={s.color} />
-              ))}
-            </div>
-
-            <div className="agent-abilities">
-              {room.abilities.map((ab) => (
-                <span
-                  key={ab}
-                  className="ability-tag"
-                  style={{
-                    borderColor: `rgba(${hexToRgbStr(room.color)}, 0.5)`,
-                    color: room.color,
-                  }}
-                >
-                  {ab}
-                </span>
-              ))}
-            </div>
+            {/* Clock */}
+            <div className="header-time"><LiveClock /></div>
           </div>
 
-          {/* Live agents from OpenClaw API */}
-          {liveAgents.length > 0 && <AgentStatusPanel agents={liveAgents} />}
+          {/* Bottom accent line */}
+          <div
+            className="header-accent-line"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${theme.colors.secondary}66, ${theme.colors.primary}66, transparent)`,
+            }}
+          />
+        </header>
 
-          {/* Screen watch panel when screen room selected */}
-          {selectedRoom === 'screen' && (
-            <div className="screen-watch-panel">
-              <div className="sw-title">📺 NODE SCREEN FEED</div>
-              <div className="sw-display">
-                <div className="sw-placeholder">
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>📡</div>
-                  <div style={{ fontSize: 10, color: theme.colors.statusOrange, letterSpacing: '0.08em' }}>FEED OFFLINE</div>
-                  <div style={{ fontSize: 8, color: 'rgba(255,102,0,0.5)', marginTop: 4 }}>
-                    Connect a node with screen capture to stream here
-                  </div>
+        {/* ── Main layout ──────────────────────────────────────────────────── */}
+        <div className="dungeon-main">
+          {/* Left: Agent panel */}
+          <aside className="dungeon-sidebar">
+            <div className="agent-card" style={{ '--accent': room.color } as React.CSSProperties}>
+              {/* Corner decorations */}
+              <div className="agent-card-top">
+                <div className="agent-emoji">{room.emoji}</div>
+                <div>
+                  <div className="agent-name" style={{ color: room.color }}>{room.agent}</div>
+                  <div className="agent-title">{room.title}</div>
+                  <div className="agent-model">⚙ {room.model}</div>
                 </div>
-                {/* Scanlines */}
-                <div className="sw-scanlines" />
               </div>
-              <div style={{ fontSize: 8, color: 'rgba(255,102,0,0.5)', textAlign: 'center', marginTop: 6, letterSpacing: '0.06em' }}>
-                TARGET: OPENCLAW NODE → SCREEN CAPTURE
+
+              <div className="agent-status">
+                <span
+                  className="status-dot"
+                  style={{
+                    background: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary,
+                    boxShadow: `0 0 6px ${isRoomActive ? theme.colors.statusGreen : theme.colors.secondary}`,
+                  }}
+                />
+                <span style={{ fontSize: 9, color: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary, letterSpacing: '0.06em' }}>
+                  {room.status}
+                </span>
+              </div>
+
+              <div className="agent-stats">
+                {room.stats.map((s) => (
+                  <StatBar key={s.label} label={s.label} value={s.value} color={s.color} />
+                ))}
+              </div>
+
+              <div className="agent-abilities">
+                {room.abilities.map((ab) => (
+                  <span
+                    key={ab}
+                    className="ability-tag"
+                    style={{
+                      borderColor: `rgba(${hexToRgbStr(room.color)}, 0.5)`,
+                      color: room.color,
+                    }}
+                  >
+                    {ab}
+                  </span>
+                ))}
               </div>
             </div>
-          )}
-        </aside>
 
-        {/* Center: Isometric dungeon map */}
-        <main className="dungeon-center">
-          <div className="map-label">◈ DUNGEON MAP — ISOMETRIC VIEW</div>
-          <div className="iso-map-container">
-            <IsoDungeonMap
-              onRoomSelect={setSelectedRoom}
-              agentActiveMap={agentActiveMap}
-              theme={theme}
-            />
-          </div>
-        </main>
+            {/* Live agents from OpenClaw API */}
+            {liveAgents.length > 0 && <AgentStatusPanel agents={liveAgents} />}
 
-        {/* Right: Activity log */}
-        <aside className="dungeon-log-panel">
-          <div className="log-title">⬡ ACTIVITY LOG</div>
-          <div className="log-entries">
-            {log.map((entry) => (
-              <div key={entry.id} className={`log-entry log-${entry.type}`}>
-                <span className="log-time">{entry.time}</span>
-                <span className="log-room">[{entry.room}]</span>
-                <span className="log-msg">{entry.msg}</span>
+            {/* Screen watch panel when screen room selected */}
+            {selectedRoom === 'screen' && (
+              <div className="screen-watch-panel">
+                <div className="sw-title">📺 NODE SCREEN FEED</div>
+                <div className="sw-display">
+                  <div className="sw-placeholder">
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>📡</div>
+                    <div style={{ fontSize: 10, color: theme.colors.statusOrange, letterSpacing: '0.08em' }}>FEED OFFLINE</div>
+                    <div style={{ fontSize: 8, color: 'rgba(255,102,0,0.5)', marginTop: 4 }}>
+                      Connect a node with screen capture to stream here
+                    </div>
+                  </div>
+                  <div className="sw-scanlines" />
+                </div>
+                <div style={{ fontSize: 8, color: 'rgba(255,102,0,0.5)', textAlign: 'center', marginTop: 6, letterSpacing: '0.06em' }}>
+                  TARGET: OPENCLAW NODE → SCREEN CAPTURE
+                </div>
               </div>
-            ))}
-            <div ref={logEndRef} />
-          </div>
-          <div className="log-footer">
-            <span style={{ color: 'rgba(0,245,255,0.4)', fontSize: 8 }}>
-              {log.length} ENTRIES — LIVE FEED
-            </span>
-          </div>
-        </aside>
+            )}
+          </aside>
+
+          {/* Center: Isometric dungeon map */}
+          <main className="dungeon-center">
+            <div className="map-label">◈ DUNGEON MAP — ISOMETRIC VIEW</div>
+            <div className="iso-map-container">
+              <IsoDungeonMap
+                onRoomSelect={setSelectedRoom}
+                agentActiveMap={agentActiveMap}
+                theme={theme}
+              />
+            </div>
+          </main>
+
+          {/* Right: Activity log */}
+          <aside className="dungeon-log-panel">
+            <div className="log-title">⬡ ACTIVITY LOG</div>
+            <div className="log-entries">
+              {log.map((entry) => (
+                <div key={entry.id} className={`log-entry log-${entry.type}`}>
+                  <span className="log-time">{entry.time}</span>
+                  <span className="log-room">[{entry.room}]</span>
+                  <span className="log-msg">{entry.msg}</span>
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+            <div className="log-footer">
+              <span style={{ color: 'rgba(0,245,255,0.4)', fontSize: 8 }}>
+                {log.length} ENTRIES — LIVE FEED
+              </span>
+            </div>
+          </aside>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

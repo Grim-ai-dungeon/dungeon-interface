@@ -4,16 +4,22 @@ export type { Theme, ThemeColors, ThemePixi } from './types';
 export { cyberpunkDungeonTheme } from './cyberpunk';
 export { hellfireTheme } from './hellfire';
 export { arcticFortressTheme } from './arctic';
+export { deepSpaceTheme } from './deepspace';
+export { toxicTheme } from './toxic';
 
 import { cyberpunkDungeonTheme } from './cyberpunk';
 import { hellfireTheme } from './hellfire';
 import { arcticFortressTheme } from './arctic';
+import { deepSpaceTheme } from './deepspace';
+import { toxicTheme } from './toxic';
 import type { Theme } from './types';
 
 export const ALL_THEMES: Theme[] = [
   cyberpunkDungeonTheme,
   hellfireTheme,
   arcticFortressTheme,
+  deepSpaceTheme,
+  toxicTheme,
 ];
 
 export const DEFAULT_THEME_ID = 'cyberpunk';

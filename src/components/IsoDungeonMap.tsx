@@ -2,6 +2,256 @@ import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import type { Theme } from '../themes';
 
+// ─── Ambient Effects Canvas ─────────────────────────────────────────────────────────────────────────────
+// Renders per-theme particle effects as a transparent overlay canvas.
+// Separate from PixiJS to avoid layer management complexity.
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  alpha: number;
+  size: number;
+  life: number;  // 0..1
+  phase: number; // random offset for twinkling
+}
+
+function AmbientCanvas({ themeId, width, height }: { themeId: string; width: number; height: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const rafRef = useRef(0);
+  const tickRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Reset particles when theme changes
+    particlesRef.current = [];
+
+    const W = width;
+    const H = height;
+
+    function spawnParticle(): Particle {
+      switch (themeId) {
+        case 'hellfire': {
+          // Embers: rise from bottom, random x, orange/red
+          return {
+            x: Math.random() * W,
+            y: H + 4,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: -(0.5 + Math.random() * 1.2),
+            alpha: 0.6 + Math.random() * 0.4,
+            size: 1.5 + Math.random() * 2,
+            life: 0,
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+        case 'arctic': {
+          // Snowflakes: drift from top
+          return {
+            x: Math.random() * W,
+            y: -4,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: 0.4 + Math.random() * 0.8,
+            alpha: 0.5 + Math.random() * 0.5,
+            size: 1 + Math.random() * 2.5,
+            life: 0,
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+        case 'deepspace': {
+          // Stars: fixed positions that twinkle (use x/y as fixed, life as brightness)
+          return {
+            x: Math.random() * W,
+            y: Math.random() * H,
+            vx: 0,
+            vy: 0,
+            alpha: Math.random(),
+            size: 0.5 + Math.random() * 1.5,
+            life: Math.random(),
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+        default:
+          return { x: 0, y: 0, vx: 0, vy: 0, alpha: 0, size: 0, life: 0, phase: 0 };
+      }
+    }
+
+    // Pre-populate static stars for deepspace
+    if (themeId === 'deepspace') {
+      for (let i = 0; i < 120; i++) {
+        particlesRef.current.push(spawnParticle());
+      }
+    }
+
+    // Toxic wave state
+    let toxicWaves: Array<{ r: number; alpha: number; maxR: number }> = [];
+    let nextWaveAt = 0;
+
+    function frame(ts: number) {
+      ctx.clearRect(0, 0, W, H);
+      tickRef.current = ts * 0.001;
+      const t = tickRef.current;
+
+      if (themeId === 'cyberpunk') {
+        // CRT scanlines: horizontal lines sweeping
+        const lineCount = Math.floor(H / 4);
+        for (let i = 0; i < lineCount; i++) {
+          const y = i * 4;
+          ctx.fillStyle = 'rgba(0,245,255,0.018)';
+          ctx.fillRect(0, y, W, 1);
+        }
+        // Sweeping bright scanline
+        const sweepY = ((t * 80) % (H + 40)) - 20;
+        const grad = ctx.createLinearGradient(0, sweepY - 12, 0, sweepY + 12);
+        grad.addColorStop(0, 'rgba(0,245,255,0)');
+        grad.addColorStop(0.5, 'rgba(0,245,255,0.07)');
+        grad.addColorStop(1, 'rgba(0,245,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, sweepY - 12, W, 24);
+
+      } else if (themeId === 'hellfire') {
+        // Spawn embers
+        if (Math.random() < 0.35) {
+          particlesRef.current.push(spawnParticle());
+        }
+        // Cap
+        if (particlesRef.current.length > 90) {
+          particlesRef.current = particlesRef.current.slice(-90);
+        }
+        // Update + draw
+        particlesRef.current = particlesRef.current.filter((p) => {
+          p.x += p.vx + Math.sin(t * 2 + p.phase) * 0.3;
+          p.y += p.vy;
+          p.life += 0.008;
+          // Fade out as particle rises
+          const fade = 1 - p.life;
+          if (fade <= 0 || p.y < -8) return false;
+          const a = p.alpha * fade;
+          // Orange ember glow
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,120,0,${a * 0.25})`;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,200,60,${a})`;
+          ctx.fill();
+          return true;
+        });
+
+      } else if (themeId === 'arctic') {
+        // Spawn snowflakes
+        if (Math.random() < 0.30) {
+          particlesRef.current.push(spawnParticle());
+        }
+        if (particlesRef.current.length > 80) {
+          particlesRef.current = particlesRef.current.slice(-80);
+        }
+        particlesRef.current = particlesRef.current.filter((p) => {
+          p.x += p.vx + Math.sin(t * 0.8 + p.phase) * 0.25;
+          p.y += p.vy;
+          p.life += 0.005;
+          if (p.y > H + 8) return false;
+          const a = p.alpha * Math.min(1, (1 - p.life) * 3);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200,230,255,${a})`;
+          ctx.fill();
+          return true;
+        });
+
+      } else if (themeId === 'deepspace') {
+        // Twinkling stars — fixed positions, vary brightness
+        particlesRef.current.forEach((p) => {
+          p.phase += 0.012 + p.size * 0.008;
+          const brightness = 0.3 + Math.abs(Math.sin(p.phase)) * 0.7;
+          const a = brightness * 0.85;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200,220,255,${a})`;
+          ctx.fill();
+          // Occasional bright star gets a small cross-gleam
+          if (p.size > 1.2 && brightness > 0.8) {
+            ctx.strokeStyle = `rgba(180,200,255,${a * 0.4})`;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(p.x - p.size * 3, p.y);
+            ctx.lineTo(p.x + p.size * 3, p.y);
+            ctx.moveTo(p.x, p.y - p.size * 3);
+            ctx.lineTo(p.x, p.y + p.size * 3);
+            ctx.stroke();
+          }
+        });
+
+      } else if (themeId === 'toxic') {
+        // Radioactive pulse waves from center
+        const cx = W / 2;
+        const cy = H / 2;
+        const maxR = Math.sqrt(cx * cx + cy * cy) * 1.1;
+
+        if (ts > nextWaveAt) {
+          toxicWaves.push({ r: 0, alpha: 0.55, maxR });
+          nextWaveAt = ts + 1400 + Math.random() * 600;
+        }
+
+        toxicWaves = toxicWaves.filter((w) => {
+          w.r += 1.6;
+          w.alpha = 0.55 * (1 - w.r / w.maxR);
+          if (w.r >= w.maxR || w.alpha <= 0) return false;
+
+          // Draw triple rings for each wave
+          for (let ring = 0; ring < 3; ring++) {
+            const ringR = w.r - ring * 10;
+            if (ringR <= 0) continue;
+            ctx.beginPath();
+            ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(140,255,0,${w.alpha * (1 - ring * 0.3)})`;
+            ctx.lineWidth = 2 - ring * 0.5;
+            ctx.stroke();
+          }
+          return true;
+        });
+
+        // Faint radioactive glow at center
+        const pulseBrightness = 0.04 + Math.abs(Math.sin(t * 1.5)) * 0.06;
+        const radGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80);
+        radGrad.addColorStop(0, `rgba(140,255,0,${pulseBrightness})`);
+        radGrad.addColorStop(1, 'rgba(140,255,0,0)');
+        ctx.fillStyle = radGrad;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      rafRef.current = requestAnimationFrame(frame);
+    }
+
+    rafRef.current = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(rafRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeId, width, height]);
+
+  if (!themeId || themeId === 'none') return null;
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none',
+        zIndex: 2,
+      }}
+    />
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Room {
@@ -186,6 +436,7 @@ export function IsoDungeonMap({
   const appRef = useRef<PIXI.Application | null>(null);
   const animFrameRef = useRef<number>(0);
   const [selectedRoom, setSelectedRoom] = useState<string>('grim');
+  const [canvasSize, setCanvasSize] = useState<{ w: number; h: number }>({ w: 800, h: 520 });
   const tickRef = useRef(0);
   const selectedRoomRef = useRef('grim');
   const agentActiveRef = useRef<Record<string, boolean>>({});
@@ -228,6 +479,7 @@ export function IsoDungeonMap({
 
       appRef.current = app;
       container.appendChild(app.canvas as HTMLCanvasElement);
+      setCanvasSize({ w: W, h: H });
 
       // ── Background scanline grid layer ────────────────────────────────────
       const bgLayer = new PIXI.Container();
@@ -592,6 +844,13 @@ export function IsoDungeonMap({
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* PixiJS canvas mount */}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* Per-theme ambient particle effects */}
+      <AmbientCanvas
+        themeId={theme?.id ?? 'cyberpunk'}
+        width={canvasSize.w}
+        height={canvasSize.h}
+      />
 
       {/* Room selector tabs */}
       <div

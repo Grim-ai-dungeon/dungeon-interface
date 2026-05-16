@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useMemo } from 'react';
 import type { AgentId, AgentInfo } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds, GRID_COLS, GRID_ROWS } from '../dungeon/rooms';
 import { TILE_SIZE, drawFloorTile, drawWallTile, drawRoomBorder, drawCorridorFloor } from '../dungeon/tiles';
-import { getRoomTorches, drawTorchSprite, applyLighting, generateTorchSparks } from '../dungeon/lighting';
+import { getRoomTorches, getCorridorTorches, drawTorchSprite, applyLighting, generateTorchSparks } from '../dungeon/lighting';
 import { ParticleSystem } from '../dungeon/particles';
 import { drawAgentSprite } from './AgentSprite';
 import { CorridorMessenger } from '../dungeon/corridorMessenger';
@@ -40,7 +40,7 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
   const lastDustRef = useRef<number>(0);
 
   // Precompute torch array and torch-to-room mapping (stable references)
-  const allTorches = useMemo(() => ROOMS.flatMap(r => getRoomTorches(r)), []);
+  const allTorches = useMemo(() => [...ROOMS.flatMap(r => getRoomTorches(r)), ...getCorridorTorches()], []);
 
   const torchToRoomId = useMemo(() => {
     const map = new Map<(typeof allTorches)[0], string>();

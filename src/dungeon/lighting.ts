@@ -37,6 +37,19 @@ function torchRadiusForRoom(id: string): number {
     default:       return 75;
   }
 }
+/** Generate dim corridor wall torches — placed at midpoints of each corridor */
+export function getCorridorTorches(): import('../types').Torch[] {
+  const torches: import('../types').Torch[] = [];
+  // Manually placed corridor midpoint torches (pixel coords)
+  // These mark the key junction/midpoint of each corridor route
+  // NW corridor (Grim-Bob): midpoint around tile (5,4)
+  torches.push({ x: 5 * 48 + 24, y: 4 * 48 + 24, color: '#DD8833', radius: 45 });
+  // NE corridor (Grim-Kevin): midpoint around tile (14,4)
+  torches.push({ x: 14 * 48 + 24, y: 4 * 48 + 24, color: '#DD8833', radius: 45 });
+  // South corridor (Grim-Stuart): midpoint tile (9,10)
+  torches.push({ x: 9 * 48 + 24, y: 10 * 48 + 24, color: '#DD8833', radius: 42 });
+  return torches;
+}
 
 /**
  * Multi-wave torch flicker — layered sine waves at non-harmonic frequencies.

@@ -433,7 +433,7 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   SIDE PANEL
+   SIDE PANEL — Parchment/dungeon stone theme
 ══════════════════════════════════════════════════════════════ */
 
 .side-panel {
@@ -442,25 +442,38 @@ body {
   width: 320px;
   height: 100%;
   z-index: 200;
-  background: var(--panel-bg);
-  border-left: 1px solid rgba(255, 153, 51, 0.3);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.03) 0px,
+      rgba(0,0,0,0.03) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(180deg, #12100e 0%, #1a1410 40%, #12100e 100%);
+  border-left: 3px solid rgba(100, 80, 50, 0.7);
   display: flex;
   flex-direction: column;
   transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  box-shadow: -4px 0 40px rgba(0, 0, 0, 0.8);
+  box-shadow: -8px 0 60px rgba(0, 0, 0, 0.95), -2px 0 8px rgba(255, 153, 51, 0.15);
 }
 
-/* Stone-frame top/bottom decorative lines */
-.side-panel::before,
+/* Wrought iron corner ornaments */
+.side-panel::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3a2a10, rgba(255, 153, 51, 0.5), #3a2a10);
+  box-shadow: 0 2px 8px rgba(255, 153, 51, 0.2);
+}
 .side-panel::after {
   content: '';
   position: absolute;
-  left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, rgba(255, 153, 51, 0.4), transparent);
+  left: 0; right: 0; bottom: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3a2a10, rgba(255, 153, 51, 0.4), #3a2a10);
 }
-.side-panel::before { top: 0; }
-.side-panel::after { bottom: 0; }
 
 .side-panel--open {
   transform: translateX(0);
@@ -565,9 +578,26 @@ body {
 
 .sp-section-label {
   font-size: 8px;
-  color: rgba(245, 230, 211, 0.4);
-  letter-spacing: 0.14em;
+  color: rgba(245, 230, 211, 0.5);
+  letter-spacing: 0.18em;
   margin-bottom: 8px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-section-label::before,
+.sp-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 153, 51, 0.3));
+}
+
+.sp-section-label::before {
+  background: linear-gradient(90deg, rgba(255, 153, 51, 0.3), transparent);
+  flex: 0 0 12px;
 }
 
 .sp-task-box {
@@ -628,17 +658,22 @@ body {
 .sp-action-btn {
   font-family: var(--font-mono);
   font-size: 9px;
-  padding: 5px 10px;
-  border: 1px solid rgba(255, 153, 51, 0.3);
+  padding: 6px 12px;
+  border: 1px solid rgba(100, 80, 50, 0.7);
   border-radius: 2px;
-  background: rgba(255, 153, 51, 0.06);
+  background:
+    linear-gradient(180deg, rgba(60,40,20,0.6) 0%, rgba(30,20,10,0.8) 100%);
   cursor: pointer;
-  letter-spacing: 0.06em;
-  transition: background 0.15s, opacity 0.15s;
+  letter-spacing: 0.08em;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .sp-action-btn:hover {
-  background: rgba(255, 153, 51, 0.15);
+  background:
+    linear-gradient(180deg, rgba(80,55,25,0.7) 0%, rgba(50,30,15,0.9) 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 8px rgba(255,153,51,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
 .sp-command-area {

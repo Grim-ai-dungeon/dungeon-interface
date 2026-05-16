@@ -12,6 +12,28 @@ import { ToastStack } from './components/ToastStack';
 import type { ToastItem } from './components/ToastStack';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 
+// ─── Dungeon ambient events — atmospheric flavor, fired periodically ──────────
+
+const DUNGEON_AMBIENT_EVENTS: { agentId: AgentId; msg: string; type: ActivityEntry['type'] }[] = [
+  { agentId: 'grim',   msg: '🌑 Shadows stir along the corridor walls...',                         type: 'info' },
+  { agentId: 'grim',   msg: '⚡ An arcane surge crackles through the dungeon ley lines.',          type: 'warn' },
+  { agentId: 'grim',   msg: '🔮 The scrying orb pulses crimson — something approaches.',          type: 'warn' },
+  { agentId: 'grim',   msg: '🐉 A low rumble echoes from deep within the dungeon.',               type: 'info' },
+  { agentId: 'grim',   msg: '🌀 The Dungeon Master senses a shift in the arcane weave.',          type: 'info' },
+  { agentId: 'kevin',  msg: '🔥 The forge blazes hotter — metal screams in the workshop!',       type: 'warn' },
+  { agentId: 'kevin',  msg: '⚙️ The gears spin faster... something stirs the mechanisms.',       type: 'info' },
+  { agentId: 'kevin',  msg: '💥 A shower of sparks erupts from the workshop anvil.',             type: 'warn' },
+  { agentId: 'kevin',  msg: '🔩 Strange vibrations rattle the bolts in Kevin\'s wall rack.',    type: 'info' },
+  { agentId: 'bob',    msg: '📖 A page turns on its own in the archive...',                      type: 'info' },
+  { agentId: 'bob',    msg: '🕯️ The library candle flickers — something passes unseen.',         type: 'info' },
+  { agentId: 'bob',    msg: '📜 An ancient scroll unrolls itself across Bob\'s desk.',           type: 'warn' },
+  { agentId: 'bob',    msg: '🔍 A tome falls from the shelf — bookmarked at a cryptic passage.', type: 'info' },
+  { agentId: 'stuart', msg: '💰 Coins rattle mysteriously inside the sealed vault.',             type: 'info' },
+  { agentId: 'stuart', msg: '✨ A stray gold coin rolls from the pile and vanishes...',           type: 'warn' },
+  { agentId: 'stuart', msg: '🔒 The treasury locks engage unexpectedly. The vault is restless.', type: 'warn' },
+  { agentId: 'stuart', msg: '👁️ Stuart eyes a suspicious ledger entry. Investigating.',          type: 'info' },
+];
+
 // ─── Task pools for simulation engine ────────────────────────────────────────
 
 const AGENT_TASKS: Record<AgentId, { task: string; log: string; type: ActivityEntry['type'] }[]> = {
@@ -319,6 +341,50 @@ function App() {
   const handleClose = useCallback(() => setSelectedId(null), []);
   const handleHover = useCallback((_id: AgentId | null) => { /* no-op, handled in canvas */ }, []);
 
+  // ── Keyboard navigation: 1-4 to select rooms, Escape to close ─────────────
+  useEffect(() => {
+    const roomOrder: AgentId[] = ['grim', 'bob', 'kevin', 'stuart'];
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const idx = parseInt(e.key, 10) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < roomOrder.length) {
+        handleRoomClick(roomOrder[idx]);
+      } else if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [handleRoomClick, handleClose]);
+
+  // ── Dungeon ambient events — periodic atmospheric flavor ───────────────────
+  useEffect(() => {
+    let cancelled = false;
+    let evtIdx = Math.floor(Math.random() * DUNGEON_AMBIENT_EVENTS.length);
+    let timerId: ReturnType<typeof setTimeout>;
+
+    function scheduleNext(delayMs: number) {
+      timerId = setTimeout(() => {
+        if (cancelled) return;
+        const evt = DUNGEON_AMBIENT_EVENTS[evtIdx % DUNGEON_AMBIENT_EVENTS.length];
+        evtIdx = (evtIdx + 1) % DUNGEON_AMBIENT_EVENTS.length;
+        addLog(evt.agentId, evt.msg, evt.type);
+        addToast(evt.agentId, evt.msg, evt.type);
+        if (pulseHandleRef.current) {
+          pulseHandleRef.current.fire(evt.agentId, 'dispatch');
+        }
+        scheduleNext(35_000 + Math.random() * 20_000);
+      }, delayMs);
+    }
+
+    // First ambient event after 20–30 seconds (let startup settle)
+    scheduleNext(20_000 + Math.random() * 10_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
+  }, [addLog, addToast]); // pulseHandleRef is a stable ref — no dep needed
+
   // ── Selected agent ──────────────────────────────────────────────────────────
   const selectedAgent = selectedId ? (agents.find(a => a.id === selectedId) ?? null) : null;
 
@@ -333,7 +399,16 @@ function App() {
         <div className="dungeon-body">
           {/* Map container */}
           <div className="dungeon-map-wrap">
-            <div className="dungeon-map-label">⚔ DUNGEON MAP — 2D TOP-DOWN VIEW</div>
+            <div className="dungeon-map-label">
+            <span>⚔ DUNGEON MAP — 2D TOP-DOWN VIEW</span>
+            <span className="dungeon-kbd-hints">
+              <kbd>1</kbd>GRIM
+              <kbd>2</kbd>BOB
+              <kbd>3</kbd>KEVIN
+              <kbd>4</kbd>TREASURY
+              <kbd>ESC</kbd>CLOSE
+            </span>
+          </div>
             <div className="dungeon-map-canvas-wrap">
               <DungeonMap
                 agents={agents}

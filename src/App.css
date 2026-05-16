@@ -345,6 +345,36 @@ body {
   letter-spacing: 0.1em;
   padding: 4px 2px 6px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Keyboard shortcut hints row */
+.dungeon-kbd-hints {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: rgba(245, 230, 211, 0.45);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.dungeon-kbd-hints kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 1px 4px;
+  background: rgba(255, 153, 51, 0.1);
+  border: 1px solid rgba(255, 153, 51, 0.35);
+  border-radius: 2px;
+  color: rgba(255, 180, 100, 0.8);
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  margin-right: 1px;
+  box-shadow: 0 1px 0 rgba(255, 153, 51, 0.2);
 }
 
 .dungeon-map-canvas-wrap {

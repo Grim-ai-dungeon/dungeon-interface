@@ -282,7 +282,7 @@ function App() {
   const { theme } = useTheme();
   const [selectedRoom, setSelectedRoom] = useState('grim');
   const [log, setLog] = useState<LogEntry[]>(INITIAL_LOG);
-  const [logId, setLogId] = useState(100);
+  const [, setLogId] = useState(100);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [liveAgents, setLiveAgents] = useState<AgentInfo[]>([]);
   const [agentActiveMap, setAgentActiveMap] = useState<Record<string, boolean>>({});

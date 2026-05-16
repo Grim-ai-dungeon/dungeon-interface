@@ -362,18 +362,18 @@ function drawRoomLabel(
   now: number,
 ): void {
   const label = ROOM_LABELS[id] ?? id.toUpperCase();
-  const alpha = isSelected ? 1.0 : isHovered ? 0.9 : 0.65;
-  const labelY = py + h - 12;
+  const alpha = isSelected ? 1.0 : isHovered ? 0.9 : 0.7;
+  const labelY = py + h - 14;
 
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
 
   // Background pill
-  const textW = Math.min(w - 8, 130);
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  const textW = Math.min(w - 8, 150);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
   ctx.beginPath();
-  ctx.roundRect(px + w / 2 - textW / 2, labelY - 11, textW, 14, 3);
+  ctx.roundRect(px + w / 2 - textW / 2, labelY - 14, textW, 18, 3);
   ctx.fill();
 
   if (isSelected || isHovered) {
@@ -382,7 +382,7 @@ function drawRoomLabel(
   }
 
   ctx.fillStyle = color;
-  ctx.font = `bold ${isSelected ? 9 : 8}px 'Courier New', monospace`;
+  ctx.font = `bold ${isSelected ? 12 : 11}px 'Courier New', monospace`;
   ctx.fillText(label, px + w / 2, labelY);
 
   if (isSelected) {
@@ -409,9 +409,9 @@ function drawTaskTicker(
   color: string,
   now: number,
 ): void {
-  // Positioned just above the room label (label is at py+h-12)
-  const barY = py + h - 26;
-  const barH = 11;
+  // Positioned just above the room label (label is at py+h-14)
+  const barY = py + h - 30;
+  const barH = 13;
   const barX = px + 4;
   const barW = w - 8;
 
@@ -446,7 +446,7 @@ function drawTaskTicker(
 
   // Task text — truncate to fit available width
   const maxW = barW - 18;
-  ctx.font = '6px \'Courier New\', monospace';
+  ctx.font = '8px \'Courier New\', monospace';
   const fullText = task.toUpperCase();
   let displayText = fullText;
   while (ctx.measureText(displayText).width > maxW && displayText.length > 0) {
@@ -456,9 +456,9 @@ function drawTaskTicker(
     displayText = displayText.slice(0, -2) + '..';
   }
 
-  ctx.fillStyle = `rgba(${r},${g},${b},${0.75 + Math.sin(now / 800) * 0.15})`;
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.85 + Math.sin(now / 800) * 0.15})`;
   ctx.textAlign = 'left';
-  ctx.fillText(displayText, barX + 11, barY + barH / 2 + 2);
+  ctx.fillText(displayText, barX + 11, barY + barH / 2 + 3);
 
   ctx.restore();
 }

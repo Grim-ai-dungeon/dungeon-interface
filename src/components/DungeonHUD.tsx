@@ -82,7 +82,7 @@ export function DungeonHUD({ agents, ocStatus }: Props) {
       <div className="hud-right">
         <div className="hud-oc-status" style={{ borderColor: ocColor + '44' }}>
           <span className="hud-status-dot" style={{ background: ocColor, boxShadow: `0 0 6px ${ocColor}` }} />
-          <span style={{ color: ocColor, fontSize: 9 }}>OPENCLAW {ocStatus.toUpperCase()}</span>
+          <span style={{ color: ocColor, fontSize: 11, letterSpacing: '0.06em', fontWeight: 'bold' }}>OPENCLAW {ocStatus.toUpperCase()}</span>
         </div>
         <div className="hud-clock"><LiveClock /></div>
       </div>

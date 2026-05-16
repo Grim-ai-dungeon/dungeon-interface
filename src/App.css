@@ -96,10 +96,10 @@ body {
 }
 
 .loading-subtitle {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--parchment-d);
-  letter-spacing: 0.15em;
-  margin-top: -6px;
+  letter-spacing: 0.1em;
+  margin-top: -4px;
 }
 
 .loading-log {
@@ -115,9 +115,9 @@ body {
 }
 
 .loading-log-line {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--parchment);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   animation: fade-in-line 0.2s ease;
 }
 
@@ -159,7 +159,7 @@ body {
 }
 
 .loading-pct {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--parchment-d);
   letter-spacing: 0.2em;
 }
@@ -224,7 +224,7 @@ body {
 
 .hud-title {
   font-family: var(--font-title);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   color: var(--torch);
   letter-spacing: 0.12em;
@@ -232,10 +232,10 @@ body {
 }
 
 .hud-sub {
-  font-size: 8px;
-  color: rgba(245, 230, 211, 0.45);
-  letter-spacing: 0.1em;
-  margin-top: 1px;
+  font-size: 10px;
+  color: rgba(245, 230, 211, 0.65);
+  letter-spacing: 0.08em;
+  margin-top: 2px;
 }
 
 .hud-stats {
@@ -252,16 +252,16 @@ body {
 
 .hud-stat-val {
   font-family: var(--font-title);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: bold;
   color: var(--parchment);
   line-height: 1;
 }
 
 .hud-stat-label {
-  font-size: 8px;
-  color: rgba(245, 230, 211, 0.45);
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  color: rgba(245, 230, 211, 0.7);
+  letter-spacing: 0.1em;
 }
 
 .hud-stat-sep {
@@ -296,15 +296,15 @@ body {
 
 .hud-clock {
   font-family: var(--font-mono);
-  font-size: 13px;
-  color: rgba(245, 230, 211, 0.6);
+  font-size: 14px;
+  color: rgba(245, 230, 211, 0.8);
   letter-spacing: 0.06em;
 }
 
 .hud-uptime {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: rgba(255, 180, 80, 0.8);
+  font-size: 13px;
+  color: rgba(255, 180, 80, 0.9);
   letter-spacing: 0.05em;
 }
 
@@ -340,10 +340,10 @@ body {
 }
 
 .dungeon-map-label {
-  font-size: 8px;
-  color: rgba(245, 230, 211, 0.35);
-  letter-spacing: 0.14em;
-  padding: 3px 2px 5px;
+  font-size: 11px;
+  color: rgba(245, 230, 211, 0.65);
+  letter-spacing: 0.1em;
+  padding: 4px 2px 6px;
   flex-shrink: 0;
 }
 
@@ -364,7 +364,7 @@ body {
 ══════════════════════════════════════════════════════════════ */
 
 .activity-log-panel {
-  width: 220px;
+  width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -384,20 +384,20 @@ body {
 }
 
 .log-header-icon {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--torch);
 }
 
 .log-header-text {
-  font-size: 9px;
-  color: rgba(245, 230, 211, 0.5);
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: rgba(245, 230, 211, 0.8);
+  letter-spacing: 0.1em;
   flex: 1;
 }
 
 .log-entry-count {
-  font-size: 8px;
-  color: rgba(245, 230, 211, 0.3);
+  font-size: 10px;
+  color: rgba(245, 230, 211, 0.55);
 }
 
 .log-entries-scroll {
@@ -410,8 +410,8 @@ body {
 }
 
 .log-entry {
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.6;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -424,14 +424,14 @@ body {
 }
 
 .log-time {
-  color: rgba(245, 230, 211, 0.3);
+  color: rgba(245, 230, 211, 0.55);
   flex-shrink: 0;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .log-room {
   flex-shrink: 0;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: bold;
 }
 
@@ -513,16 +513,16 @@ body {
 
 .sp-name {
   font-family: var(--font-title);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   letter-spacing: 0.1em;
 }
 
 .sp-role {
-  font-size: 9px;
-  color: rgba(245, 230, 211, 0.5);
-  letter-spacing: 0.08em;
-  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(245, 230, 211, 0.75);
+  letter-spacing: 0.05em;
+  margin-top: 3px;
 }
 
 .sp-header-right {
@@ -536,10 +536,10 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: bold;
-  letter-spacing: 0.1em;
-  padding: 3px 8px;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
   border: 1px solid;
   border-radius: 2px;
   white-space: nowrap;
@@ -584,9 +584,9 @@ body {
 }
 
 .sp-section-label {
-  font-size: 8px;
-  color: rgba(245, 230, 211, 0.5);
-  letter-spacing: 0.18em;
+  font-size: 10px;
+  color: rgba(245, 230, 211, 0.75);
+  letter-spacing: 0.14em;
   margin-bottom: 8px;
   text-transform: uppercase;
   display: flex;
@@ -608,12 +608,12 @@ body {
 }
 
 .sp-task-box {
-  font-size: 11px;
-  color: rgba(245, 230, 211, 0.8);
-  line-height: 1.5;
-  padding: 8px 10px;
+  font-size: 13px;
+  color: rgba(245, 230, 211, 0.92);
+  line-height: 1.55;
+  padding: 10px 12px;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 153, 51, 0.15);
+  border: 1px solid rgba(255, 153, 51, 0.2);
   border-radius: 2px;
 }
 
@@ -627,17 +627,17 @@ body {
 }
 
 .sp-log-entry {
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.6;
   display: flex;
   gap: 6px;
   animation: entry-in 0.2s ease;
 }
 
 .sp-log-time {
-  color: rgba(245, 230, 211, 0.3);
+  color: rgba(245, 230, 211, 0.55);
   flex-shrink: 0;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .sp-log-msg {
@@ -650,8 +650,8 @@ body {
 .sp-log-error .sp-log-msg   { color: #CC3333; }
 
 .sp-log-empty {
-  font-size: 10px;
-  color: rgba(245, 230, 211, 0.3);
+  font-size: 12px;
+  color: rgba(245, 230, 211, 0.5);
   font-style: italic;
   padding: 8px 0;
 }
@@ -664,8 +664,8 @@ body {
 
 .sp-action-btn {
   font-family: var(--font-mono);
-  font-size: 9px;
-  padding: 6px 12px;
+  font-size: 11px;
+  padding: 7px 13px;
   border: 1px solid rgba(100, 80, 50, 0.7);
   border-radius: 2px;
   background:
@@ -697,8 +697,8 @@ body {
 .sp-input {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 8px 10px;
+  font-size: 13px;
+  padding: 9px 11px;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 153, 51, 0.3);
   border-radius: 2px;
@@ -811,19 +811,19 @@ body {
 }
 
 .dt-agent {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: bold;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 .dt-icon {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .dt-msg {
-  font-size: 10px;
-  color: rgba(245, 230, 211, 0.8);
-  line-height: 1.4;
+  font-size: 12px;
+  color: rgba(245, 230, 211, 0.92);
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -874,7 +874,7 @@ body {
 
 @media (max-width: 900px) {
   .activity-log-panel {
-    width: 180px;
+    width: 220px;
   }
 
   .side-panel {

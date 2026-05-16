@@ -7,6 +7,8 @@ import { SidePanel } from './components/SidePanel';
 import { DungeonHUD } from './components/DungeonHUD';
 import { ActivityLog } from './components/ActivityLog';
 import { LoadingOverlay } from './components/LoadingOverlay';
+import { ToastStack } from './components/ToastStack';
+import type { ToastItem } from './components/ToastStack';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 
 // ─── Task pools for simulation engine ────────────────────────────────────────
@@ -127,7 +129,9 @@ const INITIAL_LOG: ActivityEntry[] = [
 ];
 
 let logIdCounter = 100;
+let toastIdCounter = 0;
 function nextLogId() { return ++logIdCounter; }
+function nextToastId() { return ++toastIdCounter; }
 function nowTime(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -141,6 +145,22 @@ function App() {
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
   const [selectedId, setSelectedId] = useState<AgentId | null>(null);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const addToast = useCallback((agentId: AgentId, message: string, type: ToastItem['type']) => {
+    const toast: ToastItem = {
+      id: nextToastId(),
+      agentId,
+      message,
+      type,
+      ttl: type === 'error' ? 7000 : type === 'warn' ? 5500 : 4000,
+    };
+    setToasts(prev => [...prev.slice(-4), toast]); // max 5 visible
+  }, []);
 
   const addLog = useCallback((agentId: AgentId, msg: string, type: ActivityEntry['type']) => {
     setGlobalLog(prev => [
@@ -153,6 +173,8 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     const taskIndices: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0 };
+    // Only toast for 'success' entries, throttled per agent (not every single tick)
+    const lastToastTime: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0 };
 
     function scheduleNextTick(agentId: AgentId, delay: number) {
       setTimeout(() => {
@@ -180,6 +202,13 @@ function App() {
 
         addLog(agentId, entry.log, entry.type);
 
+        // Fire a toast for success/warn entries, but throttle: max 1 per agent per ~20s
+        const now = Date.now();
+        if ((entry.type === 'success' || entry.type === 'warn') && now - lastToastTime[agentId] > 20000) {
+          lastToastTime[agentId] = now;
+          addToast(agentId, entry.log, entry.type);
+        }
+
         // Organic random delay: 4–12 seconds per agent
         scheduleNextTick(agentId, 4000 + Math.random() * 8000);
       }, delay);
@@ -192,7 +221,7 @@ function App() {
     });
 
     return () => { cancelled = true; };
-  }, [addLog]);
+  }, [addLog, addToast]);
 
   // ── OpenClaw polling ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -251,6 +280,7 @@ function App() {
   // ── Command send ────────────────────────────────────────────────────────────
   const handleSendCommand = useCallback((agentId: AgentId, cmd: string) => {
     addLog(agentId, `Command received: "${cmd}"`, 'warn');
+    addToast(agentId, `Command dispatched: "${cmd}"`, 'warn');
     setAgents(prev => prev.map(a => {
       if (a.id !== agentId) return a;
       const newEntry: ActivityEntry = {
@@ -262,7 +292,7 @@ function App() {
       };
       return { ...a, activityLog: [...a.activityLog.slice(-19), newEntry] };
     }));
-  }, [addLog]);
+  }, [addLog, addToast]);
 
   // ── Close panel ─────────────────────────────────────────────────────────────
   const handleClose = useCallback(() => setSelectedId(null), []);
@@ -309,6 +339,9 @@ function App() {
           <div className="dungeon-backdrop" onClick={handleClose} />
         )}
       </div>
+
+      {/* Toast notifications */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </>
   );
 }

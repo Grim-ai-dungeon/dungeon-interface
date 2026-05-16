@@ -17,6 +17,24 @@ function LiveClock() {
   return <>{time}</>;
 }
 
+function Uptime() {
+  const [startTime] = useState(() => Date.now());
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(Date.now() - startTime), 1000);
+    return () => clearInterval(t);
+  }, [startTime]);
+
+  const totalSec = Math.floor(elapsed / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const str = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+  return <>{str}</>;
+}
+
 export function DungeonHUD({ agents, ocStatus }: Props) {
   const activeCount = agents.filter(a => a.status === 'active').length;
   const errorCount = agents.filter(a => a.status === 'error').length;
@@ -51,7 +69,12 @@ export function DungeonHUD({ agents, ocStatus }: Props) {
           <span className="hud-stat-val" style={{ color: errorCount > 0 ? '#CC3333' : '#888' }}>
             {errorCount}
           </span>
-          <span className="hud-stat-label">ERRORS</span>
+          <span className="hud-stat-label">ALERTS</span>
+        </div>
+        <div className="hud-stat-sep">|</div>
+        <div className="hud-stat">
+          <span className="hud-stat-val hud-uptime"><Uptime /></span>
+          <span className="hud-stat-label">UPTIME</span>
         </div>
       </div>
 

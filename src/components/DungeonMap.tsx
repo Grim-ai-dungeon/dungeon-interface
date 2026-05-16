@@ -7,6 +7,7 @@ import { TILE_SIZE, drawFloorTile, drawWallTile, drawRoomBorder, drawCorridorFlo
 import { getRoomTorches, drawTorchSprite, applyLighting, generateTorchSparks } from '../dungeon/lighting';
 import { ParticleSystem } from '../dungeon/particles';
 import { drawAgentSprite } from './AgentSprite';
+import { CorridorMessenger } from '../dungeon/corridorMessenger';
 
 interface Props {
   agents: AgentInfo[];
@@ -34,6 +35,7 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
   const animFrameRef = useRef<number>(0);
   const hoveredIdRef = useRef<AgentId | null>(null);
   const particlesRef = useRef<ParticleSystem>(new ParticleSystem(42));
+  const messengerRef = useRef<CorridorMessenger>(new CorridorMessenger());
   const lastSparkRef = useRef<number>(0);
   const lastDustRef = useRef<number>(0);
 
@@ -245,6 +247,10 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
       // ── 6. Ambient particles ──────────────────────────────────────────────
       ps.draw(ctx);
 
+      // ── 6b. Corridor messenger orbs ──────────────────────────────────────────
+      messengerRef.current.update(now);
+      messengerRef.current.draw(ctx);
+
       // ── 7. Fog of war + torch lighting ───────────────────────────────────
       const activeSet = new Set(agents.filter(a => a.status === 'active').map(a => a.id));
       applyLighting(ctx, allTorches, CANVAS_W, CANVAS_H, activeSet, now, torchToRoomId);
@@ -272,6 +278,22 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover }: Pro
           ctx.fillRect(px, py, w, h);
           ctx.restore();
         }
+      }
+
+      // ── 10. Dungeon breathing vignette ──────────────────────────────────────
+      {
+        const breathe = 0.5 + Math.sin(now / 4200) * 0.5; // slow 4.2s cycle
+        const vigAlpha = 0.12 + breathe * 0.08; // 0.12..0.20 — barely visible
+        ctx.save();
+        const vg = ctx.createRadialGradient(
+          CANVAS_W / 2, CANVAS_H / 2, CANVAS_H * 0.25,
+          CANVAS_W / 2, CANVAS_H / 2, CANVAS_H * 0.85,
+        );
+        vg.addColorStop(0, 'rgba(0,0,0,0)');
+        vg.addColorStop(1, `rgba(0,0,0,${vigAlpha})`);
+        ctx.fillStyle = vg;
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.restore();
       }
 
       animFrameRef.current = requestAnimationFrame(render);

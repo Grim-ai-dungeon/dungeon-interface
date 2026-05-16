@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
+import type { Theme } from '../themes';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -175,9 +176,11 @@ const CONNECTIONS: Connection[] = [
 export function IsoDungeonMap({
   onRoomSelect,
   agentActiveMap,
+  theme,
 }: {
   onRoomSelect?: (id: string) => void;
   agentActiveMap?: Record<string, boolean>;
+  theme?: Theme;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
@@ -186,6 +189,7 @@ export function IsoDungeonMap({
   const tickRef = useRef(0);
   const selectedRoomRef = useRef('grim');
   const agentActiveRef = useRef<Record<string, boolean>>({});
+  const themeRef = useRef<Theme | undefined>(theme);
 
   // Keep refs in sync for use inside ticker
   useEffect(() => {
@@ -199,6 +203,10 @@ export function IsoDungeonMap({
   }, [agentActiveMap]);
 
   useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
@@ -208,10 +216,11 @@ export function IsoDungeonMap({
     const app = new PIXI.Application();
 
     (async () => {
+      const initTheme = themeRef.current;
       await app.init({
         width: W,
         height: H,
-        background: 0x080810,
+        background: (initTheme?.pixi?.bgColor ?? 0x080810) as number,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
@@ -264,21 +273,25 @@ export function IsoDungeonMap({
 
       // ── Draw static background grid ───────────────────────────────────────
       const gridSpacing = 40;
+      const gridCol = initTheme?.pixi?.gridColor ?? 0x00f5ff;
+      const gridAlpha = initTheme?.pixi?.gridAlpha ?? 0.04;
       for (let gx = 0; gx <= W; gx += gridSpacing) {
         bgGrid.moveTo(gx, 0);
         bgGrid.lineTo(gx, H);
-        bgGrid.stroke({ color: 0x00f5ff, width: 0.5, alpha: 0.04 });
+        bgGrid.stroke({ color: gridCol, width: 0.5, alpha: gridAlpha });
       }
       for (let gy = 0; gy <= H; gy += gridSpacing) {
         bgGrid.moveTo(0, gy);
         bgGrid.lineTo(W, gy);
-        bgGrid.stroke({ color: 0x00f5ff, width: 0.5, alpha: 0.04 });
+        bgGrid.stroke({ color: gridCol, width: 0.5, alpha: gridAlpha });
       }
 
       // ── Draw isometric floor grid ─────────────────────────────────────────
       const gridGfx = new PIXI.Graphics();
       gridLayer.addChild(gridGfx);
 
+      const floorFill = initTheme?.pixi?.floorFill ?? 0x0c0c18;
+      const floorBorder = initTheme?.pixi?.floorBorder ?? 0x00f5ff;
       for (let c = 0; c < 5; c++) {
         for (let r = 0; r < 3; r++) {
           const { x, y } = isoToScreen(c, r);
@@ -287,8 +300,8 @@ export function IsoDungeonMap({
           gridGfx.lineTo(offsetX + x, offsetY + y + ISO_H / 2);
           gridGfx.lineTo(offsetX + x - ISO_W / 2, offsetY + y);
           gridGfx.closePath();
-          gridGfx.fill({ color: 0x0c0c18, alpha: 0.9 });
-          gridGfx.stroke({ color: 0x00f5ff, width: 0.4, alpha: 0.15 });
+          gridGfx.fill({ color: floorFill, alpha: 0.9 });
+          gridGfx.stroke({ color: floorBorder, width: 0.4, alpha: 0.15 });
         }
       }
 
@@ -309,6 +322,8 @@ export function IsoDungeonMap({
 
       // ── Draw connections (circuit lines) ──────────────────────────────────
       const connGraphics: PIXI.Graphics[] = [];
+      const connColor = initTheme?.pixi?.connColor ?? 0x00f5ff;
+      const connCoreColor = initTheme?.pixi?.connCoreColor ?? 0x00ffff;
       CONNECTIONS.forEach((conn) => {
         const from = roomPositions[conn.from];
         const to = roomPositions[conn.to];
@@ -325,7 +340,7 @@ export function IsoDungeonMap({
         gfx.moveTo(from.x, from.y);
         gfx.lineTo(midX, midY);
         gfx.lineTo(to.x, to.y);
-        gfx.stroke({ color: 0x00f5ff, width: 2.5, alpha: 0.3 });
+        gfx.stroke({ color: connColor, width: 2.5, alpha: 0.3 });
         connGraphics.push(gfx);
 
         // Bright core
@@ -334,12 +349,12 @@ export function IsoDungeonMap({
         core.moveTo(from.x, from.y);
         core.lineTo(midX, midY);
         core.lineTo(to.x, to.y);
-        core.stroke({ color: 0x00ffff, width: 0.8, alpha: 0.6 });
+        core.stroke({ color: connCoreColor, width: 0.8, alpha: 0.6 });
       });
 
       // ── Create data packets ────────────────────────────────────────────────
       const packets: DataPacket[] = [];
-      const packetColors = [0x00ffff, 0x00ff88, 0xffd700, 0xff6600, 0xaa44ff];
+      const packetColors = initTheme?.pixi?.packetColors ?? [0x00ffff, 0x00ff88, 0xffd700, 0xff6600, 0xaa44ff];
 
       for (let i = 0; i < CONNECTIONS.length; i++) {
         // 2 packets per connection, staggered
@@ -377,7 +392,10 @@ export function IsoDungeonMap({
         blockGfx.cursor = 'pointer';
         roomLayer.addChild(blockGfx);
 
-        drawRoomBlock(blockGfx, x, y, room.color, room.glowColor, 28, room.active);
+        const roomThemeData = initTheme?.pixi?.rooms?.[room.id];
+        const roomFillColor = roomThemeData?.color ?? room.color;
+        const roomGlowColor = roomThemeData?.glowColor ?? room.glowColor;
+        drawRoomBlock(blockGfx, x, y, roomFillColor, roomGlowColor, 28, room.active);
 
         // Labels
         const labelContainer = new PIXI.Container();
@@ -396,7 +414,7 @@ export function IsoDungeonMap({
           text: room.label,
           style: {
             fontSize: 8,
-            fill: room.glowColor,
+            fill: roomGlowColor,
             fontFamily: 'Share Tech Mono, monospace',
             letterSpacing: 1,
             align: 'center',
@@ -428,7 +446,7 @@ export function IsoDungeonMap({
           onRoomSelect?.(room.id);
         });
 
-        roomGraphics[room.id] = { block: blockGfx, glow: glowGfx, container: labelContainer, room };
+        roomGraphics[room.id] = { block: blockGfx, glow: glowGfx, container: labelContainer, room: { ...room, color: roomFillColor, glowColor: roomGlowColor } };
       });
 
       // ── Screen Watch overlay in Observation Deck room ─────────────────────
@@ -475,12 +493,13 @@ export function IsoDungeonMap({
         const t = tickRef.current;
 
         // Animate scan line
+        const scanCol = themeRef.current?.pixi?.scanLineColor ?? 0x00f5ff;
         scanY = (scanY + 1.2) % H;
         scanLine.clear();
         scanLine.rect(0, scanY - 1, W, 2);
-        scanLine.fill({ color: 0x00f5ff, alpha: 0.06 });
+        scanLine.fill({ color: scanCol, alpha: 0.06 });
         scanLine.rect(0, scanY - 8, W, 16);
-        scanLine.fill({ color: 0x00f5ff, alpha: 0.015 });
+        scanLine.fill({ color: scanCol, alpha: 0.015 });
 
         // Animate rooms
         ROOMS.forEach((room) => {

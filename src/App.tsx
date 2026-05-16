@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { IsoDungeonMap } from './components/IsoDungeonMap';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { useTheme } from './ThemeContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,6 +151,7 @@ function LiveClock() {
 // ─── Agent status panel ───────────────────────────────────────────────────────
 
 function AgentStatusPanel({ agents }: { agents: AgentInfo[] }) {
+  const { theme } = useTheme();
   if (!agents.length) return null;
   return (
     <div className="agent-live-panel">
@@ -158,8 +161,8 @@ function AgentStatusPanel({ agents }: { agents: AgentInfo[] }) {
           <span
             className="status-dot"
             style={{
-              background: a.status === 'active' ? '#00ff88' : '#ffd700',
-              boxShadow: `0 0 5px ${a.status === 'active' ? '#00ff88' : '#ffd700'}`,
+              background: a.status === 'active' ? theme.colors.statusGreen : theme.colors.secondary,
+              boxShadow: `0 0 5px ${a.status === 'active' ? theme.colors.statusGreen : theme.colors.secondary}`,
             }}
           />
           <div className="agent-live-info">
@@ -180,6 +183,7 @@ function AgentStatusPanel({ agents }: { agents: AgentInfo[] }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 function App() {
+  const { theme } = useTheme();
   const [selectedRoom, setSelectedRoom] = useState('grim');
   const [log, setLog] = useState<LogEntry[]>(INITIAL_LOG);
   const [logId, setLogId] = useState(100);
@@ -312,7 +316,7 @@ function App() {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [log]);
 
-  const ocColor = ocStatus === 'online' ? '#00ff88' : ocStatus === 'offline' ? '#ff4444' : '#ffd700';
+  const ocColor = ocStatus === 'online' ? theme.colors.statusGreen : ocStatus === 'offline' ? theme.colors.statusRed : theme.colors.secondary;
 
   // Compute effective active state (from live data or static)
   const isRoomActive = agentActiveMap[selectedRoom] ?? room.active;
@@ -320,7 +324,7 @@ function App() {
   return (
     <div className="dungeon-root">
       {/* Scan line */}
-      <div className="scan-line" />
+      {theme.scanLineStyle !== 'none' && <div className={`scan-line scan-line--${theme.scanLineStyle}`} />}
       {/* Grid background */}
       <div className="dungeon-bg-grid" />
       <div className="dungeon-bg-vignette" />
@@ -335,6 +339,7 @@ function App() {
           </div>
         </div>
         <div className="header-right">
+          <ThemeSwitcher />
           <div className="oc-status">
             <span
               className="status-dot"
@@ -366,11 +371,11 @@ function App() {
               <span
                 className="status-dot"
                 style={{
-                  background: isRoomActive ? '#00ff88' : '#ffd700',
-                  boxShadow: `0 0 6px ${isRoomActive ? '#00ff88' : '#ffd700'}`,
+                  background: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary,
+                  boxShadow: `0 0 6px ${isRoomActive ? theme.colors.statusGreen : theme.colors.secondary}`,
                 }}
               />
-              <span style={{ fontSize: 9, color: isRoomActive ? '#00ff88' : '#ffd700', letterSpacing: '0.06em' }}>
+              <span style={{ fontSize: 9, color: isRoomActive ? theme.colors.statusGreen : theme.colors.secondary, letterSpacing: '0.06em' }}>
                 {room.status}
               </span>
             </div>
@@ -407,7 +412,7 @@ function App() {
               <div className="sw-display">
                 <div className="sw-placeholder">
                   <div style={{ fontSize: 28, marginBottom: 8 }}>📡</div>
-                  <div style={{ fontSize: 10, color: '#ff6600', letterSpacing: '0.08em' }}>FEED OFFLINE</div>
+                  <div style={{ fontSize: 10, color: theme.colors.statusOrange, letterSpacing: '0.08em' }}>FEED OFFLINE</div>
                   <div style={{ fontSize: 8, color: 'rgba(255,102,0,0.5)', marginTop: 4 }}>
                     Connect a node with screen capture to stream here
                   </div>
@@ -429,6 +434,7 @@ function App() {
             <IsoDungeonMap
               onRoomSelect={setSelectedRoom}
               agentActiveMap={agentActiveMap}
+              theme={theme}
             />
           </div>
         </main>

@@ -95,14 +95,13 @@ body {
 }
 
 .dungeon-root--loading {
-  visibility: hidden;
   opacity: 0;
+  pointer-events: none;
 }
 
 .dungeon-root--ready {
-  visibility: visible;
   opacity: 1;
-  transition: opacity 0.4s ease 0.1s;
+  transition: opacity 0.6s ease 0.05s;
 }
 
 /* ── Loading overlay ──────────────────────────────────────────────────────── */
@@ -367,7 +366,7 @@ body {
   padding: 12px;
   position: relative;
   flex-shrink: 0;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 0, 0, 0.4);
 }
 
 .agent-card::before {
@@ -660,7 +659,11 @@ body {
   border-radius: 3px;
   overflow: hidden;
   position: relative;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 40px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 40px rgba(0, 0, 0, 0.9),
+    0 2px 12px rgba(0, 0, 0, 0.6),
+    inset 0 0 60px rgba(0, 0, 0, 0.2),
+    inset 0 0 2px rgba(0, 245, 255, 0.03);
 }
 
 /* ── Activity log ─────────────────────────────────────────────────────────── */
@@ -671,6 +674,7 @@ body {
   border: 1px solid var(--theme-border-primary, rgba(0, 245, 255, 0.18));
   border-radius: 3px;
   overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
 .log-title {

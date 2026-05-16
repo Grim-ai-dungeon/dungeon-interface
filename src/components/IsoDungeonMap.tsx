@@ -1106,8 +1106,16 @@ export function IsoDungeonMap({
 
   const activeRoom = ROOMS.find((r) => r.id === selectedRoom);
 
+  const gc = activeRoom ? '#' + activeRoom.glowColor.toString(16).padStart(6, '0') : '#00f5ff';
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* HUD corner brackets — main container */}
+      <div style={{ position: 'absolute', top: 6, left: 6, width: 14, height: 14, borderTop: `1.5px solid ${gc}88`, borderLeft: `1.5px solid ${gc}88`, pointerEvents: 'none', zIndex: 10 }} />
+      <div style={{ position: 'absolute', top: 6, right: 6, width: 14, height: 14, borderTop: `1.5px solid ${gc}88`, borderRight: `1.5px solid ${gc}88`, pointerEvents: 'none', zIndex: 10 }} />
+      <div style={{ position: 'absolute', bottom: 46, left: 6, width: 14, height: 14, borderBottom: `1.5px solid ${gc}88`, borderLeft: `1.5px solid ${gc}88`, pointerEvents: 'none', zIndex: 10 }} />
+      <div style={{ position: 'absolute', bottom: 46, right: 6, width: 14, height: 14, borderBottom: `1.5px solid ${gc}88`, borderRight: `1.5px solid ${gc}88`, pointerEvents: 'none', zIndex: 10 }} />
+
       {/* PixiJS canvas mount */}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
@@ -1117,6 +1125,73 @@ export function IsoDungeonMap({
         width={canvasSize.w}
         height={canvasSize.h}
       />
+
+      {/* Zoom controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          zIndex: 15,
+        }}
+      >
+        {[
+          { label: '+', action: handleZoomIn, title: 'Zoom in' },
+          { label: '−', action: handleZoomOut, title: 'Zoom out' },
+          { label: '⊙', action: handleZoomReset, title: 'Reset zoom' },
+        ].map(({ label, action, title }) => (
+          <button
+            key={label}
+            onClick={action}
+            title={title}
+            style={{
+              width: 24,
+              height: 24,
+              background: 'rgba(8,8,20,0.88)',
+              border: `1px solid ${gc}55`,
+              borderRadius: 3,
+              color: gc,
+              fontFamily: "'Share Tech Mono', monospace",
+              fontSize: 13,
+              lineHeight: 1,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+              boxShadow: `0 0 6px ${gc}22`,
+              padding: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = `${gc}22`;
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 12px ${gc}55`;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(8,8,20,0.88)';
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 6px ${gc}22`;
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        {/* Zoom level display */}
+        <div style={{
+          fontSize: 7,
+          color: `${gc}88`,
+          textAlign: 'center',
+          letterSpacing: '0.05em',
+          fontFamily: "'Share Tech Mono', monospace",
+          marginTop: 2,
+        }}>
+          {Math.round(zoomLevel * 100)}%
+        </div>
+      </div>
+
+      {/* Hover tooltip */}
+      {tooltip && <RoomTooltip tooltip={tooltip} />}
 
       {/* Room selector tabs */}
       <div
@@ -1157,8 +1232,8 @@ export function IsoDungeonMap({
                 ? `0 0 8px rgba(${hexToRgb(room.glowColor)}, 0.8)`
                 : 'none',
               boxShadow: selectedRoom === room.id
-                ? `0 0 12px rgba(${hexToRgb(room.glowColor)}, 0.3)`
-                : 'none',
+                ? `0 0 12px rgba(${hexToRgb(room.glowColor)}, 0.3), 0 2px 8px rgba(0,0,0,0.6)`
+                : '0 2px 6px rgba(0,0,0,0.4)',
               transition: 'all 0.2s ease',
             }}
           >
@@ -1174,15 +1249,21 @@ export function IsoDungeonMap({
             position: 'absolute',
             top: 12,
             right: 12,
-            background: 'rgba(8,8,16,0.9)',
-            border: `1px solid rgba(${hexToRgb(activeRoom.glowColor)}, 0.5)`,
+            background: 'rgba(6,6,14,0.94)',
+            border: `1px solid rgba(${hexToRgb(activeRoom.glowColor)}, 0.55)`,
             borderRadius: 4,
             padding: '10px 14px',
             fontFamily: "'Share Tech Mono', monospace",
             minWidth: 180,
-            boxShadow: `0 0 20px rgba(${hexToRgb(activeRoom.glowColor)}, 0.2)`,
+            boxShadow: `0 0 24px rgba(${hexToRgb(activeRoom.glowColor)}, 0.25), 0 4px 20px rgba(0,0,0,0.7), inset 0 0 30px rgba(0,0,0,0.2)`,
+            zIndex: 15,
           }}
         >
+          {/* HUD corner brackets on room info card */}
+          <div style={{ position: 'absolute', top: 3, left: 3, width: 8, height: 8, borderTop: `1.5px solid ${gc}`, borderLeft: `1.5px solid ${gc}` }} />
+          <div style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderTop: `1.5px solid ${gc}`, borderRight: `1.5px solid ${gc}` }} />
+          <div style={{ position: 'absolute', bottom: 3, left: 3, width: 8, height: 8, borderBottom: `1.5px solid ${gc}`, borderLeft: `1.5px solid ${gc}` }} />
+          <div style={{ position: 'absolute', bottom: 3, right: 3, width: 8, height: 8, borderBottom: `1.5px solid ${gc}`, borderRight: `1.5px solid ${gc}` }} />
           <div style={{ fontSize: 22, marginBottom: 4 }}>{activeRoom.emoji}</div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.1em', marginBottom: 2 }}>
             {activeRoom.label}

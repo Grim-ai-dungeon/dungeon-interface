@@ -1,0 +1,33 @@
+{
+  "generatedAt": 1778975130626,
+  "agents": {
+    "bob": {
+      "status": "done",
+      "model": "gemini-3.1-pro",
+      "lastInteractionAt": 1778973936721,
+      "totalTokens": 13957,
+      "estimatedCostUsd": 0
+    },
+    "kevin": {
+      "status": "running",
+      "model": "claude-sonnet-4.6",
+      "lastInteractionAt": 1778974398927,
+      "totalTokens": 0,
+      "estimatedCostUsd": 0
+    },
+    "stuart": {
+      "status": "done",
+      "model": "gpt-5.4-mini",
+      "lastInteractionAt": 1778973376934,
+      "totalTokens": 15408,
+      "estimatedCostUsd": 0
+    },
+    "grim": {
+      "status": "done",
+      "model": "gpt-5.4",
+      "lastInteractionAt": 1778975002587,
+      "totalTokens": 89654,
+      "estimatedCostUsd": 0
+    }
+  }
+}

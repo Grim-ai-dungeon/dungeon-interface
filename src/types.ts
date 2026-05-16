@@ -12,6 +12,13 @@ export interface AgentInfo {
   status: AgentStatus;
   currentTask?: string;
   activityLog: ActivityEntry[];
+  /** Real session data from dungeon-state.json */
+  model?: string;
+  lastInteractionAt?: number;
+  totalTokens?: number;
+  estimatedCostUsd?: number;
+  /** 'running' | 'done' | 'idle' from the actual session file */
+  sessionStatus?: string;
 }
 
 export interface ActivityEntry {

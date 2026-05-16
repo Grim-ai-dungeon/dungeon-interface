@@ -6,7 +6,7 @@ import { DungeonMap } from './components/DungeonMap';
 import type { PulseHandle } from './components/DungeonMap';
 import { SidePanel } from './components/SidePanel';
 import { DungeonHUD } from './components/DungeonHUD';
-import { ActivityLog } from './components/ActivityLog';
+import { AgentStatusPanel } from './components/AgentStatusPanel';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ToastStack } from './components/ToastStack';
 import type { ToastItem } from './components/ToastStack';
@@ -252,52 +252,80 @@ function App() {
     return () => { cancelled = true; };
   }, [addLog, addToast]);
 
-  // ── OpenClaw polling ────────────────────────────────────────────────────────
+  // ── OpenClaw health check ────────────────────────────────────────────────────
+  // Only /health is a real endpoint on this gateway. The old /api/v1/status
+  // and /api/v1/sessions endpoints return 404 — they don't exist.
   useEffect(() => {
-    const checkStatus = async () => {
+    const checkHealth = async () => {
       try {
-        const res = await fetch('http://localhost:18789/api/v1/status', {
-          signal: AbortSignal.timeout(2000),
+        const res = await fetch('http://localhost:18789/health', {
+          signal: AbortSignal.timeout(2500),
         });
-        setOcStatus(res.ok ? 'online' : 'offline');
+        if (res.ok) {
+          const body = await res.json() as { ok?: boolean; status?: string };
+          setOcStatus((body.ok || body.status === 'live') ? 'online' : 'offline');
+        } else {
+          setOcStatus('offline');
+        }
       } catch {
         setOcStatus('offline');
       }
     };
 
-    const fetchSessions = async () => {
+    checkHealth();
+    const t1 = setInterval(checkHealth, 15_000);
+    return () => { clearInterval(t1); };
+  }, []);
+
+  // ── Dungeon state polling — reads real session data from public/dungeon-state.json
+  // This file is written by update-dungeon-state.py and reflects actual agent sessions.
+  useEffect(() => {
+    const fetchDungeonState = async () => {
       try {
-        const res = await fetch('http://localhost:18789/api/v1/sessions', {
+        const res = await fetch('/dungeon-state.json?t=' + Date.now(), {
           signal: AbortSignal.timeout(3000),
         });
         if (!res.ok) return;
-        const data = await res.json();
-        const sessions: unknown[] = Array.isArray(data) ? data : (data as { sessions?: unknown[] }).sessions ?? [];
+        const data = await res.json() as {
+          generatedAt: number;
+          agents: Record<string, {
+            status: string;
+            model: string;
+            lastInteractionAt: number;
+            totalTokens: number;
+            estimatedCostUsd: number;
+          }>;
+        };
 
-        setAgents(prev => {
-          const updated = prev.map(agent => {
-            const session = sessions.find((s: unknown) => {
-              const ss = s as Record<string, unknown>;
-              return ss['id'] === agent.id || ss['agent'] === agent.id || (ss['name'] as string)?.toLowerCase().includes(agent.id);
-            }) as Record<string, unknown> | undefined;
-            if (!session) return agent;
+        setAgents(prev => prev.map(agent => {
+          const real = data.agents[agent.id];
+          if (!real) return agent;
 
-            const status = (session['status'] ?? session['state'] ?? 'idle') as AgentInfo['status'];
-            const task = (session['task'] ?? session['currentTask'] ?? session['description']) as string | undefined;
-            return { ...agent, status, currentTask: task };
-          });
-          return updated;
-        });
+          // Map real session status to AgentStatus
+          const sessionStatus = real.status;
+          const agentStatus: AgentInfo['status'] =
+            sessionStatus === 'running' ? 'active' :
+            sessionStatus === 'error'   ? 'error'  :
+            'idle';
+
+          return {
+            ...agent,
+            status: agentStatus,
+            sessionStatus,
+            model: real.model,
+            lastInteractionAt: real.lastInteractionAt,
+            totalTokens: real.totalTokens,
+            estimatedCostUsd: real.estimatedCostUsd,
+          };
+        }));
       } catch {
-        // silently ignore
+        // silently ignore — file may not exist yet
       }
     };
 
-    checkStatus();
-    fetchSessions();
-    const t1 = setInterval(checkStatus, 10_000);
-    const t2 = setInterval(fetchSessions, 8_000);
-    return () => { clearInterval(t1); clearInterval(t2); };
+    fetchDungeonState();
+    const t2 = setInterval(fetchDungeonState, 30_000);
+    return () => { clearInterval(t2); };
   }, []);
 
   // ── Room click handler ──────────────────────────────────────────────────────
@@ -420,8 +448,14 @@ function App() {
             </div>
           </div>
 
-          {/* Activity log */}
-          <ActivityLog entries={globalLog} />
+          {/* Agent status + activity log */}
+          <AgentStatusPanel
+            agents={agents}
+            entries={globalLog}
+            selectedId={selectedId}
+            onSelectAgent={handleRoomClick}
+            onSendCommand={handleSendCommand}
+          />
         </div>
 
         {/* Side panel overlay */}

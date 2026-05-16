@@ -97,6 +97,51 @@ export function SidePanel({ agent, onClose, onSendCommand }: Props) {
         </div>
       </div>
 
+      {/* Session Info — real data when available */}
+      {agent && (agent.model || agent.lastInteractionAt) && (
+        <div className="sp-section sp-session-info">
+          <div className="sp-section-label">SESSION INFO</div>
+          <div className="sp-session-rows">
+            {agent.model && (
+              <div className="sp-session-row">
+                <span className="sp-session-key">MODEL</span>
+                <span className="sp-session-val" style={{ color }}>{agent.model}</span>
+              </div>
+            )}
+            {agent.sessionStatus && (
+              <div className="sp-session-row">
+                <span className="sp-session-key">SESSION</span>
+                <span className="sp-session-val" style={{
+                  color: agent.sessionStatus === 'running' ? '#44ff88' :
+                         agent.sessionStatus === 'error'   ? '#CC3333' : '#888',
+                }}>{agent.sessionStatus.toUpperCase()}</span>
+              </div>
+            )}
+            {agent.totalTokens !== undefined && agent.totalTokens > 0 && (
+              <div className="sp-session-row">
+                <span className="sp-session-key">TOKENS</span>
+                <span className="sp-session-val">{agent.totalTokens.toLocaleString()}</span>
+              </div>
+            )}
+            {agent.lastInteractionAt && (
+              <div className="sp-session-row">
+                <span className="sp-session-key">LAST SEEN</span>
+                <span className="sp-session-val">
+                  {(() => {
+                    const diff = Date.now() - agent.lastInteractionAt!;
+                    const m = Math.floor(diff / 60000);
+                    const h = Math.floor(m / 60);
+                    if (h > 0) return `${h}h ${m % 60}m ago`;
+                    if (m > 0) return `${m}m ago`;
+                    return 'just now';
+                  })()}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Current Task */}
       {agent && (
         <div className="sp-section">

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as PIXI from 'pixi.js';
 import type { Theme } from '../themes';
 
@@ -277,6 +277,18 @@ interface DataPacket {
   speed: number;
   color: number;
   gfx: PIXI.Graphics;
+  trailGfx: PIXI.Graphics;
+  trail: Array<{ x: number; y: number }>;
+}
+
+interface TooltipInfo {
+  roomId: string;
+  screenX: number;
+  screenY: number;
+  name: string;
+  status: string;
+  task: string;
+  glowColor: number;
 }
 
 // ─── Isometric helpers ────────────────────────────────────────────────────────
@@ -300,38 +312,47 @@ function drawRoomBlock(
   fillColor: number,
   borderColor: number,
   height = 28,
-  active = false
+  active = false,
+  hoverLift = 0
 ) {
   const hw = ISO_W / 2;
   const hh = ISO_H / 2;
   const alpha = active ? 0.95 : 0.75;
+  const ly = y - hoverLift;
 
   // Top face (diamond)
-  gfx.moveTo(x, y - hh);
-  gfx.lineTo(x + hw, y);
-  gfx.lineTo(x, y + hh);
-  gfx.lineTo(x - hw, y);
+  gfx.moveTo(x, ly - hh);
+  gfx.lineTo(x + hw, ly);
+  gfx.lineTo(x, ly + hh);
+  gfx.lineTo(x - hw, ly);
   gfx.closePath();
   gfx.fill({ color: fillColor, alpha });
   gfx.stroke({ color: borderColor, width: 1.5, alpha: 0.9 });
 
   // Left face
-  gfx.moveTo(x - hw, y);
-  gfx.lineTo(x - hw, y + height);
-  gfx.lineTo(x, y + hh + height);
-  gfx.lineTo(x, y + hh);
+  gfx.moveTo(x - hw, ly);
+  gfx.lineTo(x - hw, ly + height);
+  gfx.lineTo(x, ly + hh + height);
+  gfx.lineTo(x, ly + hh);
   gfx.closePath();
   gfx.fill({ color: scaleColor(fillColor, 0.4), alpha });
   gfx.stroke({ color: borderColor, width: 1, alpha: 0.7 });
 
   // Right face
-  gfx.moveTo(x + hw, y);
-  gfx.lineTo(x + hw, y + height);
-  gfx.lineTo(x, y + hh + height);
-  gfx.lineTo(x, y + hh);
+  gfx.moveTo(x + hw, ly);
+  gfx.lineTo(x + hw, ly + height);
+  gfx.lineTo(x, ly + hh + height);
+  gfx.lineTo(x, ly + hh);
   gfx.closePath();
   gfx.fill({ color: scaleColor(fillColor, 0.55), alpha });
   gfx.stroke({ color: borderColor, width: 1, alpha: 0.7 });
+}
+
+function brightenColor(color: number, factor: number): number {
+  const r = Math.min(255, Math.floor(((color >> 16) & 0xff) * factor));
+  const g = Math.min(255, Math.floor(((color >> 8) & 0xff) * factor));
+  const b = Math.min(255, Math.floor((color & 0xff) * factor));
+  return (r << 16) | (g << 8) | b;
 }
 
 function scaleColor(color: number, factor: number): number {
@@ -421,6 +442,50 @@ const CONNECTIONS: Connection[] = [
   { from: 'kevin', to: 'screen' },
 ];
 
+// ─── Agent info for hover tooltips ──────────────────────────────────────────
+
+const ROOM_AGENT_INFO: Record<string, { name: string; status: string; task: string }> = {
+  grim: { name: 'GRIM', status: 'ACTIVE', task: 'Overseeing dungeon ops' },
+  bob: { name: 'BOB', status: 'IDLE', task: 'Awaiting research orders' },
+  kevin: { name: 'KEVIN', status: 'ACTIVE', task: 'Visual effects — UI polish' },
+  screen: { name: 'SCREEN WATCH', status: 'OFFLINE', task: 'No node stream' },
+};
+
+// ─── Tooltip component ────────────────────────────────────────────────────────
+
+function RoomTooltip({ tooltip }: { tooltip: TooltipInfo }) {
+  const gc = '#' + tooltip.glowColor.toString(16).padStart(6, '0');
+  const statusColor = tooltip.status === 'ACTIVE' ? '#00ff88' : tooltip.status === 'OFFLINE' ? '#ff4444' : '#ffd700';
+  return (
+    <div style={{
+      position: 'absolute',
+      left: tooltip.screenX + 18,
+      top: Math.max(8, tooltip.screenY - 44),
+      background: 'rgba(4,4,12,0.97)',
+      border: `1px solid ${gc}88`,
+      borderRadius: 4,
+      padding: '8px 12px',
+      pointerEvents: 'none',
+      zIndex: 20,
+      minWidth: 165,
+      boxShadow: `0 0 20px ${gc}33, 0 4px 20px rgba(0,0,0,0.8)`,
+      fontFamily: "'Share Tech Mono', monospace",
+    }}>
+      {/* HUD corner brackets */}
+      <div style={{ position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderTop: `1.5px solid ${gc}`, borderLeft: `1.5px solid ${gc}` }} />
+      <div style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderTop: `1.5px solid ${gc}`, borderRight: `1.5px solid ${gc}` }} />
+      <div style={{ position: 'absolute', bottom: 3, left: 3, width: 7, height: 7, borderBottom: `1.5px solid ${gc}`, borderLeft: `1.5px solid ${gc}` }} />
+      <div style={{ position: 'absolute', bottom: 3, right: 3, width: 7, height: 7, borderBottom: `1.5px solid ${gc}`, borderRight: `1.5px solid ${gc}` }} />
+      <div style={{ fontSize: 10, fontWeight: 700, color: gc, letterSpacing: '0.12em', marginBottom: 5 }}>{tooltip.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor, boxShadow: `0 0 4px ${statusColor}`, flexShrink: 0, display: 'inline-block' }} />
+        <span style={{ fontSize: 8, color: statusColor, letterSpacing: '0.08em' }}>{tooltip.status}</span>
+      </div>
+      <div style={{ fontSize: 8, color: 'rgba(200,220,255,0.65)', letterSpacing: '0.05em', lineHeight: 1.6 }}>{tooltip.task}</div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function IsoDungeonMap({
@@ -442,6 +507,21 @@ export function IsoDungeonMap({
   const agentActiveRef = useRef<Record<string, boolean>>({});
   const themeRef = useRef<Theme | undefined>(theme);
 
+  // Hover state for tooltips + lift effect
+  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
+  const hoveredRoomRef = useRef<string | null>(null);
+  const hoverLiftRef = useRef<Record<string, number>>({});
+
+  // Zoom state
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const zoomRef = useRef(1.0);
+  const stageContainerRef = useRef<PIXI.Container | null>(null);
+  const roomPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+
+  const handleZoomIn = useCallback(() => setZoomLevel((z) => Math.min(2.0, Math.round((z + 0.15) * 100) / 100)), []);
+  const handleZoomOut = useCallback(() => setZoomLevel((z) => Math.max(0.5, Math.round((z - 0.15) * 100) / 100)), []);
+  const handleZoomReset = useCallback(() => setZoomLevel(1.0), []);
+
   // Keep refs in sync for use inside ticker
   useEffect(() => {
     selectedRoomRef.current = selectedRoom;
@@ -456,6 +536,20 @@ export function IsoDungeonMap({
   useEffect(() => {
     themeRef.current = theme;
   }, [theme]);
+
+  // Apply zoom to PixiJS stage
+  useEffect(() => {
+    zoomRef.current = zoomLevel;
+    if (stageContainerRef.current && appRef.current) {
+      const app = appRef.current;
+      const W = app.screen.width;
+      const H = app.screen.height;
+      const sc = stageContainerRef.current;
+      sc.scale.set(zoomLevel);
+      sc.x = (W - W * zoomLevel) / 2;
+      sc.y = (H - H * zoomLevel) / 2;
+    }
+  }, [zoomLevel]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -481,9 +575,14 @@ export function IsoDungeonMap({
       container.appendChild(app.canvas as HTMLCanvasElement);
       setCanvasSize({ w: W, h: H });
 
+      // ── Zoomable stage container ───────────────────────────────────────────
+      const stageContainer = new PIXI.Container();
+      app.stage.addChild(stageContainer);
+      stageContainerRef.current = stageContainer;
+
       // ── Background scanline grid layer ────────────────────────────────────
       const bgLayer = new PIXI.Container();
-      app.stage.addChild(bgLayer);
+      stageContainer.addChild(bgLayer);
 
       // Pulsing background grid using PixiJS graphics
       const bgGrid = new PIXI.Graphics();
@@ -493,31 +592,31 @@ export function IsoDungeonMap({
 
       // ── Floor grid layer ──────────────────────────────────────────────────
       const gridLayer = new PIXI.Container();
-      app.stage.addChild(gridLayer);
+      stageContainer.addChild(gridLayer);
 
       // ── Connection layer ──────────────────────────────────────────────────
       const connLayer = new PIXI.Container();
-      app.stage.addChild(connLayer);
+      stageContainer.addChild(connLayer);
 
       // ── Room layer ────────────────────────────────────────────────────────
       const roomLayer = new PIXI.Container();
-      app.stage.addChild(roomLayer);
+      stageContainer.addChild(roomLayer);
 
       // ── Glow layer ────────────────────────────────────────────────────────
       const glowLayer = new PIXI.Container();
-      app.stage.addChildAt(glowLayer, app.stage.children.indexOf(roomLayer));
+      stageContainer.addChildAt(glowLayer, stageContainer.children.indexOf(roomLayer));
 
       // ── Label layer ───────────────────────────────────────────────────────
       const labelLayer = new PIXI.Container();
-      app.stage.addChild(labelLayer);
+      stageContainer.addChild(labelLayer);
 
       // ── Packet layer (above connections, below rooms) ──────────────────────
       const packetLayer = new PIXI.Container();
-      app.stage.addChildAt(packetLayer, app.stage.children.indexOf(glowLayer));
+      stageContainer.addChildAt(packetLayer, stageContainer.children.indexOf(glowLayer));
 
       // ── Screen watch overlay layer (top) ──────────────────────────────────
       const overlayLayer = new PIXI.Container();
-      app.stage.addChild(overlayLayer);
+      stageContainer.addChild(overlayLayer);
 
       // Centre offset
       const offsetX = W / 2;
@@ -563,6 +662,7 @@ export function IsoDungeonMap({
         const { x, y } = isoToScreen(room.col, room.row);
         roomPositions[room.id] = { x: offsetX + x, y: offsetY + y };
       });
+      roomPositionsRef.current = roomPositions;
 
       // ── Connection paths (precomputed) ─────────────────────────────────────
       const connPaths: Array<{
@@ -574,6 +674,7 @@ export function IsoDungeonMap({
 
       // ── Draw connections (circuit lines) ──────────────────────────────────
       const connGraphics: PIXI.Graphics[] = [];
+      const connDashGraphics: PIXI.Graphics[] = [];
       const connColor = initTheme?.pixi?.connColor ?? 0x00f5ff;
       const connCoreColor = initTheme?.pixi?.connCoreColor ?? 0x00ffff;
       CONNECTIONS.forEach((conn) => {
@@ -586,22 +687,30 @@ export function IsoDungeonMap({
 
         connPaths.push({ from, midX, midY, to });
 
-        // Glow outer line
+        // Glow base line (static, fades in/out)
         const gfx = new PIXI.Graphics();
         connLayer.addChild(gfx);
         gfx.moveTo(from.x, from.y);
         gfx.lineTo(midX, midY);
         gfx.lineTo(to.x, to.y);
-        gfx.stroke({ color: connColor, width: 2.5, alpha: 0.3 });
+        gfx.stroke({ color: connColor, width: 4, alpha: 0.1 });
         connGraphics.push(gfx);
 
-        // Bright core
-        const core = new PIXI.Graphics();
-        connLayer.addChild(core);
-        core.moveTo(from.x, from.y);
-        core.lineTo(midX, midY);
-        core.lineTo(to.x, to.y);
-        core.stroke({ color: connCoreColor, width: 0.8, alpha: 0.6 });
+        // Animated dash line (cleared and redrawn every tick with offset)
+        const dashGfx = new PIXI.Graphics();
+        connLayer.addChild(dashGfx);
+        connDashGraphics.push(dashGfx);
+
+        // Node dots at connection points (from, mid, to)
+        const nodeGfx = new PIXI.Graphics();
+        connLayer.addChild(nodeGfx);
+        [from, { x: midX, y: midY }, to].forEach((pos) => {
+          nodeGfx.circle(pos.x, pos.y, 5.5);
+          nodeGfx.fill({ color: connColor, alpha: 0.12 });
+          nodeGfx.stroke({ color: connColor, width: 1, alpha: 0.55 });
+          nodeGfx.circle(pos.x, pos.y, 2.5);
+          nodeGfx.fill({ color: connCoreColor, alpha: 0.85 });
+        });
       });
 
       // ── Create data packets ────────────────────────────────────────────────
@@ -611,14 +720,18 @@ export function IsoDungeonMap({
       for (let i = 0; i < CONNECTIONS.length; i++) {
         // 2 packets per connection, staggered
         for (let j = 0; j < 2; j++) {
-          const gfx = new PIXI.Graphics();
-          packetLayer.addChild(gfx);
+          const trailGfx = new PIXI.Graphics();
+          packetLayer.addChild(trailGfx);
+          const pktGfx = new PIXI.Graphics();
+          packetLayer.addChild(pktGfx);
           packets.push({
             connIndex: i,
             t: j * 0.5,
             speed: 0.003 + Math.random() * 0.002,
             color: packetColors[i % packetColors.length],
-            gfx,
+            gfx: pktGfx,
+            trailGfx,
+            trail: [],
           });
         }
       }
@@ -647,7 +760,7 @@ export function IsoDungeonMap({
         const roomThemeData = initTheme?.pixi?.rooms?.[room.id];
         const roomFillColor = roomThemeData?.color ?? room.color;
         const roomGlowColor = roomThemeData?.glowColor ?? room.glowColor;
-        drawRoomBlock(blockGfx, x, y, roomFillColor, roomGlowColor, 28, room.active);
+        drawRoomBlock(blockGfx, x, y, roomFillColor, roomGlowColor, 28, room.active, 0);
 
         // Labels
         const labelContainer = new PIXI.Container();
@@ -726,6 +839,31 @@ export function IsoDungeonMap({
           onRoomSelect?.(room.id);
         });
 
+        hitArea.on('pointerover', (e) => {
+          hoveredRoomRef.current = room.id;
+          const agentInfo = ROOM_AGENT_INFO[room.id] ?? { name: room.id.toUpperCase(), status: 'UNKNOWN', task: '' };
+          setTooltip({
+            roomId: room.id,
+            screenX: e.global.x,
+            screenY: e.global.y,
+            name: agentInfo.name,
+            status: agentInfo.status,
+            task: agentInfo.task,
+            glowColor: roomGlowColor,
+          });
+        });
+
+        hitArea.on('pointermove', (e) => {
+          setTooltip((prev) => prev ? { ...prev, screenX: e.global.x, screenY: e.global.y } : prev);
+        });
+
+        hitArea.on('pointerout', () => {
+          if (hoveredRoomRef.current === room.id) {
+            hoveredRoomRef.current = null;
+          }
+          setTooltip(null);
+        });
+
         blockGfx.on('pointerdown', () => {
           setSelectedRoom(room.id);
           onRoomSelect?.(room.id);
@@ -786,22 +924,40 @@ export function IsoDungeonMap({
         scanLine.rect(0, scanY - 8, W, 16);
         scanLine.fill({ color: scanCol, alpha: 0.015 });
 
-        // Animate rooms
+        // Animate rooms — hover lift + glow
         ROOMS.forEach((room) => {
           const entry = roomGraphics[room.id];
           if (!entry) return;
-          const { glow } = entry;
+          const { block, glow } = entry;
           const { x, y } = roomPositions[room.id];
           const isSelected = selectedRoomRef.current === room.id;
+          const isHovered = hoveredRoomRef.current === room.id;
 
           // Check if agent is marked active from external data
           const isActive = agentActiveRef.current[room.id] ?? room.active;
 
+          // Hover lift: smoothly animate the lift amount
+          const targetLift = isHovered ? 8 : 0;
+          const currentLift = hoverLiftRef.current[room.id] ?? 0;
+          const newLift = currentLift + (targetLift - currentLift) * 0.18;
+          hoverLiftRef.current[room.id] = newLift;
+
+          // Redraw block with hover lift
+          if (Math.abs(newLift - currentLift) > 0.05) {
+            const roomThemeData = themeRef.current?.pixi?.rooms?.[room.id];
+            const roomFillColor = roomThemeData?.color ?? room.color;
+            const roomGlowColor = roomThemeData?.glowColor ?? room.glowColor;
+            block.clear();
+            const hoverBrighten = isHovered ? 1.35 : 1.0;
+            drawRoomBlock(block, x, y, brightenColor(roomFillColor, hoverBrighten), brightenColor(roomGlowColor, hoverBrighten), 28, isActive, newLift);
+          }
+
           // Reactive pulse: active agents pulse faster and brighter
           const pulseSpeed = isActive ? 2.2 : 0.8;
           const pulse = Math.sin(t * pulseSpeed + room.col * 0.7) * 0.5 + 0.5;
-          const glowAlpha = isActive ? 0.20 + pulse * 0.28 : 0.05 + pulse * 0.08;
-          const glowRadius = isActive ? 62 + pulse * 20 : 46 + pulse * 10;
+          const hoverGlowBoost = isHovered ? 1.8 : 1.0;
+          const glowAlpha = (isActive ? 0.20 + pulse * 0.28 : 0.05 + pulse * 0.08) * hoverGlowBoost;
+          const glowRadius = (isActive ? 62 + pulse * 20 : 46 + pulse * 10) * (isHovered ? 1.25 : 1.0);
 
           glow.clear();
 
@@ -809,36 +965,100 @@ export function IsoDungeonMap({
           for (let i = 3; i >= 1; i--) {
             const r = glowRadius * i * 0.55;
             const a = (glowAlpha / i) * (isSelected ? 2.0 : 1.0);
-            glow.ellipse(x, y + 8, r, r * 0.42);
-            glow.fill({ color: room.glowColor, alpha: Math.min(a, 0.65) });
+            glow.ellipse(x, y + 8 - newLift * 0.5, r, r * 0.42);
+            glow.fill({ color: room.glowColor, alpha: Math.min(a, 0.75) });
           }
 
           // Selected room highlight ring
           if (isSelected) {
             const ringPulse = Math.sin(t * 3) * 0.5 + 0.5;
-            glow.moveTo(x, y - ISO_H / 2 - 3);
-            glow.lineTo(x + ISO_W / 2 + 3, y + 3);
-            glow.lineTo(x, y + ISO_H / 2 + 3);
-            glow.lineTo(x - ISO_W / 2 - 3, y + 3);
+            glow.moveTo(x, y - ISO_H / 2 - 3 - newLift);
+            glow.lineTo(x + ISO_W / 2 + 3, y + 3 - newLift);
+            glow.lineTo(x, y + ISO_H / 2 + 3 - newLift);
+            glow.lineTo(x - ISO_W / 2 - 3, y + 3 - newLift);
             glow.closePath();
             glow.stroke({ color: room.glowColor, width: 2, alpha: 0.6 + ringPulse * 0.4 });
+          }
+
+          // Hover ring highlight
+          if (isHovered && !isSelected) {
+            glow.moveTo(x, y - ISO_H / 2 - 2 - newLift);
+            glow.lineTo(x + ISO_W / 2 + 2, y + 2 - newLift);
+            glow.lineTo(x, y + ISO_H / 2 + 2 - newLift);
+            glow.lineTo(x - ISO_W / 2 - 2, y + 2 - newLift);
+            glow.closePath();
+            glow.stroke({ color: room.glowColor, width: 1.5, alpha: 0.5 });
           }
 
           // Extra "burst" effect when active
           if (isActive) {
             const burstAlpha = pulse * 0.12;
-            glow.ellipse(x, y, glowRadius * 0.3, glowRadius * 0.14);
+            glow.ellipse(x, y - newLift, glowRadius * 0.3, glowRadius * 0.14);
             glow.fill({ color: 0xffffff, alpha: burstAlpha });
           }
         });
 
-        // Animate circuit lines
+        // Animate circuit lines (glow pulse)
         connGraphics.forEach((g, i) => {
           const pulse = Math.sin(t * 1.5 + i * 0.9) * 0.5 + 0.5;
-          g.alpha = 0.18 + pulse * 0.45;
+          g.alpha = 0.12 + pulse * 0.35;
         });
 
-        // Animate data packets
+        // Animate dash lines (march effect)
+        connDashGraphics.forEach((dashGfx, i) => {
+          const path = connPaths[i];
+          if (!path) return;
+          dashGfx.clear();
+
+          const pulse = Math.sin(t * 1.5 + i * 0.9) * 0.5 + 0.5;
+          const dashAlpha = 0.4 + pulse * 0.5;
+
+          // Draw dashes along each segment of the L-shaped path
+          const dashLen = 12;
+          const gapLen = 8;
+          const totalUnit = dashLen + gapLen;
+          const marchOffset = (t * 30) % totalUnit;
+
+          // Segment 1: from -> mid
+          const seg1Dx = path.midX - path.from.x;
+          const seg1Dy = path.midY - path.from.y;
+          const seg1Len = Math.sqrt(seg1Dx * seg1Dx + seg1Dy * seg1Dy);
+          if (seg1Len > 0) {
+            const ux = seg1Dx / seg1Len; const uy = seg1Dy / seg1Len;
+            let d = -marchOffset;
+            while (d < seg1Len) {
+              const d0 = Math.max(0, d);
+              const d1 = Math.min(seg1Len, d + dashLen);
+              if (d1 > d0) {
+                dashGfx.moveTo(path.from.x + ux * d0, path.from.y + uy * d0);
+                dashGfx.lineTo(path.from.x + ux * d1, path.from.y + uy * d1);
+                dashGfx.stroke({ color: connCoreColor, width: 1.5, alpha: dashAlpha });
+              }
+              d += totalUnit;
+            }
+          }
+
+          // Segment 2: mid -> to
+          const seg2Dx = path.to.x - path.midX;
+          const seg2Dy = path.to.y - path.midY;
+          const seg2Len = Math.sqrt(seg2Dx * seg2Dx + seg2Dy * seg2Dy);
+          if (seg2Len > 0) {
+            const ux = seg2Dx / seg2Len; const uy = seg2Dy / seg2Len;
+            let d = -(marchOffset + (seg1Len % totalUnit));
+            while (d < seg2Len) {
+              const d0 = Math.max(0, d);
+              const d1 = Math.min(seg2Len, d + dashLen);
+              if (d1 > d0) {
+                dashGfx.moveTo(path.midX + ux * d0, path.midY + uy * d0);
+                dashGfx.lineTo(path.midX + ux * d1, path.midY + uy * d1);
+                dashGfx.stroke({ color: connCoreColor, width: 1.5, alpha: dashAlpha });
+              }
+              d += totalUnit;
+            }
+          }
+        });
+
+        // Animate data packets with trails
         packets.forEach((pkt) => {
           pkt.t += pkt.speed;
           if (pkt.t > 1) pkt.t -= 1;
@@ -848,16 +1068,29 @@ export function IsoDungeonMap({
 
           const pos = lerpPos(path.from, path.midX, path.midY, path.to, pkt.t);
 
+          // Update trail
+          pkt.trail.push({ x: pos.x, y: pos.y });
+          if (pkt.trail.length > 14) pkt.trail.shift();
+
+          // Draw trail afterglow
+          pkt.trailGfx.clear();
+          for (let i = 0; i < pkt.trail.length - 1; i++) {
+            const trailAlpha = (i / pkt.trail.length) * 0.55;
+            const trailRadius = 1.0 + (i / pkt.trail.length) * 2.5;
+            pkt.trailGfx.circle(pkt.trail[i].x, pkt.trail[i].y, trailRadius);
+            pkt.trailGfx.fill({ color: pkt.color, alpha: trailAlpha });
+          }
+
           pkt.gfx.clear();
-          // Outer glow
-          pkt.gfx.circle(pos.x, pos.y, 4.5);
-          pkt.gfx.fill({ color: pkt.color, alpha: 0.25 });
+          // Outer glow halo
+          pkt.gfx.circle(pos.x, pos.y, 5.5);
+          pkt.gfx.fill({ color: pkt.color, alpha: 0.2 });
           // Core dot
-          pkt.gfx.circle(pos.x, pos.y, 2.2);
-          pkt.gfx.fill({ color: pkt.color, alpha: 0.9 });
+          pkt.gfx.circle(pos.x, pos.y, 2.5);
+          pkt.gfx.fill({ color: pkt.color, alpha: 0.92 });
           // Bright center
-          pkt.gfx.circle(pos.x, pos.y, 1);
-          pkt.gfx.fill({ color: 0xffffff, alpha: 0.8 });
+          pkt.gfx.circle(pos.x, pos.y, 1.1);
+          pkt.gfx.fill({ color: 0xffffff, alpha: 0.9 });
         });
       });
     })();

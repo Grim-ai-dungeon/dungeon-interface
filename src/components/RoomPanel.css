@@ -518,6 +518,7 @@
   border-radius: 3px;
   background: rgba(255,255,255,0.02);
   transition: background 0.15s;
+  min-width: 0;
 }
 
 .rp-task-item:hover { background: rgba(255,255,255,0.04); }
@@ -531,7 +532,6 @@
 }
 
 .rp-task-text {
-  flex: 1;
   font-size: 12px;
   color: #ccc;
   min-width: 0;
@@ -591,6 +591,7 @@
 
 .rp-task-add-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 10px 12px;
   border-top: 1px solid rgba(255,153,51,0.12);
@@ -646,6 +647,110 @@
 
 .rp-task-add-btn:hover:not(:disabled) { background: rgba(255,153,51,0.22); }
 .rp-task-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Task enhancements ── */
+.rp-task-item--done {
+  opacity: 0.55;
+}
+
+.rp-task-item--overdue {
+  border-left: 2px solid #ff4444;
+  padding-left: 6px;
+}
+
+.rp-task-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rp-task-due {
+  font-size: 10px;
+  color: #888;
+  line-height: 1;
+}
+
+.rp-task-due--overdue {
+  color: #ff6666;
+  font-weight: 600;
+}
+
+.rp-task-separator {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 4px 2px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 4px;
+}
+
+.rp-task-order-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.rp-task-item:hover .rp-task-order-btns {
+  opacity: 1;
+}
+
+.rp-task-order-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 8px;
+  padding: 1px 3px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.rp-task-order-btn:hover:not(:disabled) { color: var(--rp-color, #FF9933); }
+.rp-task-order-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+.rp-task-clear-row {
+  padding: 4px 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rp-task-clear-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 8px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.rp-task-clear-btn:hover {
+  color: #ff9999;
+  border-color: rgba(255,100,100,0.4);
+}
+
+.rp-task-date-input {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 11px;
+  padding: 4px 5px;
+  width: 118px;
+  flex-shrink: 0;
+  color-scheme: dark;
+}
+
+.rp-task-date-input:focus {
+  outline: none;
+  border-color: var(--rp-color, #FF9933);
+}
 
 /* ─── TreasuryTab ─────────────────────────────────────────────────────────── */
 

@@ -1,6 +1,6 @@
 // ─── RoomPanel.tsx — Floating draggable room panel ────────────────────────────
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
 import type { GatewayMessage, TreasuryData } from '../hooks/useGateway';
 import './RoomPanel.css';
@@ -63,6 +63,7 @@ interface Task {
   text: string;
   done: boolean;
   priority: 'high' | 'med' | 'low';
+  dueDate?: string; // ISO date string YYYY-MM-DD
 }
 
 interface Props {
@@ -276,23 +277,49 @@ export function RoomPanel({
   }, []);
 
   // ── Task state ─────────────────────────────────────────────────────────────
-  const [tasks, setTasks] = useState<Task[]>(() =>
-    (DEFAULT_TASKS[agent.id] ?? []).map(t => ({
+  const taskStorageKey = `dungeon-tasks-${agent.id}`;
+
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    try {
+      const saved = localStorage.getItem(`dungeon-tasks-${agent.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Task[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* ignore */ }
+    return (DEFAULT_TASKS[agent.id] ?? []).map(t => ({
       id: ++taskCounter,
       text: t.text,
       done: false,
       priority: t.priority,
-    }))
-  );
+      dueDate: undefined,
+    }));
+  });
+
+  // Persist tasks to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(taskStorageKey, JSON.stringify(tasks));
+    } catch { /* ignore */ }
+  }, [tasks, taskStorageKey]);
+
   const [taskInput, setTaskInput] = useState('');
   const [taskPriority, setTaskPriority] = useState<'high' | 'med' | 'low'>('med');
+  const [taskDueDate, setTaskDueDate] = useState('');
 
   const handleTaskAdd = useCallback(() => {
     const text = taskInput.trim();
     if (!text) return;
-    setTasks(prev => [...prev, { id: ++taskCounter, text, done: false, priority: taskPriority }]);
+    setTasks(prev => [...prev, {
+      id: ++taskCounter,
+      text,
+      done: false,
+      priority: taskPriority,
+      dueDate: taskDueDate || undefined,
+    }]);
     setTaskInput('');
-  }, [taskInput, taskPriority]);
+    setTaskDueDate('');
+  }, [taskInput, taskPriority, taskDueDate]);
 
   const handleTaskKey = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleTaskAdd();
@@ -304,6 +331,30 @@ export function RoomPanel({
 
   const handleTaskDelete = useCallback((id: number) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const handleTaskMoveUp = useCallback((id: number) => {
+    setTasks(prev => {
+      const idx = prev.findIndex(t => t.id === id);
+      if (idx <= 0) return prev;
+      const next = [...prev];
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      return next;
+    });
+  }, []);
+
+  const handleTaskMoveDown = useCallback((id: number) => {
+    setTasks(prev => {
+      const idx = prev.findIndex(t => t.id === id);
+      if (idx < 0 || idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const handleClearCompleted = useCallback(() => {
+    setTasks(prev => prev.filter(t => !t.done));
   }, []);
 
   // ── Panel style ────────────────────────────────────────────────────────────
@@ -352,7 +403,7 @@ export function RoomPanel({
             agent.id === 'stuart'
               ? { id: 'treasury', icon: '📊', label: 'Treasury' }
               : { id: 'activity', icon: '📋', label: 'Log' },
-            { id: 'tasks',    icon: '📝', label: 'Tasks' },
+            { id: 'tasks',    icon: '📝', label: `Tasks (${tasks.filter(t => !t.done).length})` },
           ] as { id: TabId; icon: string; label: string }[]).map(tab => (
             <button
               key={tab.id}
@@ -404,9 +455,14 @@ export function RoomPanel({
               setTaskInput={setTaskInput}
               taskPriority={taskPriority}
               setTaskPriority={setTaskPriority}
+              taskDueDate={taskDueDate}
+              setTaskDueDate={setTaskDueDate}
               onAdd={handleTaskAdd}
               onToggle={handleTaskToggle}
               onDelete={handleTaskDelete}
+              onMoveUp={handleTaskMoveUp}
+              onMoveDown={handleTaskMoveDown}
+              onClearCompleted={handleClearCompleted}
               onKeyDown={handleTaskKey}
             />
           )}
@@ -565,47 +621,110 @@ interface TasksTabProps {
   setTaskInput: (v: string) => void;
   taskPriority: 'high' | 'med' | 'low';
   setTaskPriority: (v: 'high' | 'med' | 'low') => void;
+  taskDueDate: string;
+  setTaskDueDate: (v: string) => void;
   onAdd: () => void;
   onToggle: (id: number) => void;
   onDelete: (id: number) => void;
+  onMoveUp: (id: number) => void;
+  onMoveDown: (id: number) => void;
+  onClearCompleted: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+}
+
+function isOverdue(dueDate?: string): boolean {
+  if (!dueDate) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return dueDate < today;
 }
 
 function TasksTab({
   tasks, taskInput, setTaskInput, taskPriority, setTaskPriority,
-  onAdd, onToggle, onDelete, onKeyDown,
+  taskDueDate, setTaskDueDate,
+  onAdd, onToggle, onDelete, onMoveUp, onMoveDown, onClearCompleted, onKeyDown,
 }: TasksTabProps) {
+  const pendingTasks = tasks.filter(t => !t.done);
+  const doneTasks = tasks.filter(t => t.done);
+  const orderedTasks = [...pendingTasks, ...doneTasks];
+  const hasDone = doneTasks.length > 0;
+
   return (
     <div className="rp-tasks">
       <div className="rp-task-list">
         {tasks.length === 0 ? (
           <div className="rp-task-empty">No tasks assigned — add one below.</div>
         ) : (
-          tasks.map(task => (
-            <div key={task.id} className="rp-task-item">
-              <input
-                type="checkbox"
-                className="rp-task-checkbox"
-                checked={task.done}
-                onChange={() => onToggle(task.id)}
-              />
-              <span className={`rp-task-text${task.done ? ' rp-task-text--done' : ''}`}>
-                {task.text}
-              </span>
-              <span className={`rp-task-priority rp-task-priority--${task.priority}`}>
-                {task.priority}
-              </span>
-              <button
-                className="rp-task-delete-btn"
-                onClick={() => onDelete(task.id)}
-                title="Remove task"
-              >
-                ×
-              </button>
-            </div>
-          ))
+          orderedTasks.map((task, idx) => {
+            const overdue = isOverdue(task.dueDate) && !task.done;
+            const isPending = !task.done;
+            const isFirstDone = task.done && idx > 0 && !orderedTasks[idx - 1]?.done;
+            return (
+              <React.Fragment key={task.id}>
+                {isFirstDone && hasDone && (
+                  <div className="rp-task-separator">✓ Completed</div>
+                )}
+                <div
+                  className={[
+                    'rp-task-item',
+                    task.done ? 'rp-task-item--done' : '',
+                    overdue ? 'rp-task-item--overdue' : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  <input
+                    type="checkbox"
+                    className="rp-task-checkbox"
+                    checked={task.done}
+                    onChange={() => onToggle(task.id)}
+                  />
+                  <div className="rp-task-info">
+                    <span className={`rp-task-text${task.done ? ' rp-task-text--done' : ''}`}>
+                      {task.text}
+                    </span>
+                    {task.dueDate && (
+                      <span className={`rp-task-due${overdue ? ' rp-task-due--overdue' : ''}`}>
+                        {overdue ? '⚠ ' : '📅 '}{task.dueDate}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`rp-task-priority rp-task-priority--${task.priority}`}>
+                    {task.priority}
+                  </span>
+                  {isPending && (
+                    <div className="rp-task-order-btns">
+                      <button
+                        className="rp-task-order-btn"
+                        onClick={() => onMoveUp(task.id)}
+                        title="Move up"
+                        disabled={pendingTasks[0]?.id === task.id}
+                      >▲</button>
+                      <button
+                        className="rp-task-order-btn"
+                        onClick={() => onMoveDown(task.id)}
+                        title="Move down"
+                        disabled={pendingTasks[pendingTasks.length - 1]?.id === task.id}
+                      >▼</button>
+                    </div>
+                  )}
+                  <button
+                    className="rp-task-delete-btn"
+                    onClick={() => onDelete(task.id)}
+                    title="Remove task"
+                  >
+                    ×
+                  </button>
+                </div>
+              </React.Fragment>
+            );
+          })
         )}
       </div>
+      {hasDone && (
+        <div className="rp-task-clear-row">
+          <button className="rp-task-clear-btn" onClick={onClearCompleted}>
+            🗑 Clear completed ({doneTasks.length})
+          </button>
+        </div>
+      )}
       <div className="rp-task-add-row">
         <input
           type="text"
@@ -624,6 +743,13 @@ function TasksTab({
           <option value="med">Med</option>
           <option value="low">Low</option>
         </select>
+        <input
+          type="date"
+          className="rp-task-date-input"
+          value={taskDueDate}
+          onChange={e => setTaskDueDate(e.target.value)}
+          title="Due date (optional)"
+        />
         <button
           className="rp-task-add-btn"
           onClick={onAdd}

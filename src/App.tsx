@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import { DungeonMapPixi } from './components/DungeonMapPixi';
 import type { PulseHandle } from './components/DungeonMap';
-import { SidePanel } from './components/SidePanel';
+import { RoomPanel } from './components/RoomPanel';
 import { DungeonHUD } from './components/DungeonHUD';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ScreenWatcher } from './components/ScreenWatcher';
@@ -345,7 +345,7 @@ function App() {
     }
   }, [addLog]);
 
-  // ── Command send ────────────────────────────────────────────────────────────
+  // ── Command send (kept for future panel use) ────────────────────────────────
   const handleSendCommand = useCallback((agentId: AgentId, cmd: string) => {
     addLog(agentId, `Command received: "${cmd}"`, 'warn');
     setAgents(prev => prev.map(a => {
@@ -367,6 +367,7 @@ function App() {
       }, 250);
     }
   }, [addLog]);
+  void handleSendCommand; // reserved for future panel API integration
 
   // ── Close panel ─────────────────────────────────────────────────────────────
   const handleClose = useCallback(() => setSelectedId(null), []);
@@ -459,16 +460,12 @@ function App() {
           </div>
         </div>
 
-        {/* Side panel overlay */}
-        <SidePanel
-          agent={selectedAgent}
-          onClose={handleClose}
-          onSendCommand={handleSendCommand}
-        />
-
-        {/* Backdrop click to close panel */}
-        {selectedId && (
-          <div className="dungeon-backdrop" onClick={handleClose} />
+        {/* Floating room panel — no backdrop, non-blocking */}
+        {selectedAgent && (
+          <RoomPanel
+            agent={selectedAgent}
+            onClose={handleClose}
+          />
         )}
       </div>
 

@@ -38,6 +38,7 @@ AGENT_ID_MAP = {
     "bob":    "bob",
     "kevin":  "kevin",
     "stuart": "stuart",
+    "agnes":  "agnes",
 }
 
 # Default model when config doesn't specify
@@ -134,12 +135,13 @@ def build_dungeon_state(config: dict, token: str | None) -> dict:
             status="idle",
         )
 
-    # ── Ensure all 4 canonical agents exist with fallback defaults ────────────
+    # ── Ensure all 5 canonical agents exist with fallback defaults ────────────
     canonical = {
         "grim":   DEFAULT_MODEL,
         "bob":    "myclaw/gemini-3.1-pro",
         "kevin":  "myclaw/claude-sonnet-4.6",
         "stuart": "myclaw/gpt-5.4-mini",
+        "agnes":  "myclaw/claude-sonnet-4.6",
     }
     for uid, fallback_model in canonical.items():
         if uid not in agent_map:

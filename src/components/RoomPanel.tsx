@@ -118,6 +118,8 @@ interface Props {
   /** Custom agent management */
   onDeleteAgent?: (agentId: string) => void;
   isCustomAgent?: boolean;
+  /** When set, switch to chat tab. Pass a monotonically-incrementing counter to re-trigger. */
+  requestChatFocusSeq?: number;
 }
 
 type TabId = 'chat' | 'activity' | 'tasks' | 'treasury';
@@ -143,6 +145,7 @@ export function RoomPanel({
   onFetchTreasury,
   onDeleteAgent,
   isCustomAgent = false,
+  requestChatFocusSeq,
 }: Props) {
   const color = AGENT_COLORS[agent.id] ?? '#FF9933';
   const glow = color + '26'; // ~15% alpha for box-shadow
@@ -206,6 +209,13 @@ export function RoomPanel({
   // ── Tab state ──────────────────────────────────────────────────────────────
   // For Stuart, default to treasury tab; all others default to chat
   const [activeTab, setActiveTab] = useState<TabId>(agent.id === 'stuart' ? 'treasury' : 'chat');
+
+  // When a command is sent externally, switch to chat tab so the response is visible
+  useEffect(() => {
+    if (requestChatFocusSeq && requestChatFocusSeq > 0) {
+      setActiveTab('chat');
+    }
+  }, [requestChatFocusSeq]);
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');

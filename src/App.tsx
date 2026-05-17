@@ -658,7 +658,9 @@ function App() {
     }
   }, [addLog, handleBringToFront]);
 
-  // ── Command send (kept for future panel use) ────────────────────────────────
+  // ── Command send: opens agent window and switches to chat tab ─────────────────
+  const [chatFocusSeqs, setChatFocusSeqs] = useState<Record<AgentId, number>>({});
+
   const handleSendCommand = useCallback((agentId: AgentId, cmd: string) => {
     addLog(agentId, `Command received: "${cmd}"`, 'warn');
     setAgents(prev => prev.map(a => {
@@ -672,6 +674,17 @@ function App() {
       };
       return { ...a, activityLog: [...a.activityLog.slice(-19), newEntry] };
     }));
+    // Open the agent's window if not already open, and bring to front
+    setOpenWindowIds(prev => {
+      if (prev.includes(agentId)) return prev;
+      return [...prev, agentId];
+    });
+    setWindowZOrder(prev => {
+      const without = prev.filter(x => x !== agentId);
+      return [...without, agentId];
+    });
+    // Signal RoomPanel to switch to chat tab
+    setChatFocusSeqs(prev => ({ ...prev, [agentId]: (prev[agentId] ?? 0) + 1 }));
     // Pulse: Grim dispatch → minion
     if (pulseHandleRef.current) {
       pulseHandleRef.current.fire('grim', 'dispatch');
@@ -680,7 +693,7 @@ function App() {
       }, 250);
     }
   }, [addLog]);
-  void handleSendCommand; // reserved for future panel API integration
+  void handleSendCommand; // wired to SidePanel quick actions; auto-opens RoomPanel chat
 
   // ── Close panel ─────────────────────────────────────────────────────────────
   const handleClose = useCallback((id: AgentId) => {
@@ -845,6 +858,7 @@ function App() {
               onFetchTreasury={fetchTreasury}
               onDeleteAgent={handleDeleteAgent}
               isCustomAgent={!(DEFAULT_AGENT_IDS as readonly string[]).includes(agent.id)}
+              requestChatFocusSeq={chatFocusSeqs[agent.id]}
             />
           );
         })}

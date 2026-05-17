@@ -14,6 +14,7 @@ const AGENT_COLORS: Record<string, string> = {
   bob:    '#99CCFF',
   kevin:  '#FF6633',
   stuart: '#FFD700',
+  agnes:  '#CC88FF',
 };
 
 const AGENT_EMOJIS: Record<string, string> = {
@@ -21,6 +22,7 @@ const AGENT_EMOJIS: Record<string, string> = {
   bob:    '📚',
   kevin:  '🔧',
   stuart: '💰',
+  agnes:  '🎨',
 };
 
 const AGENT_ROLES: Record<string, string> = {
@@ -28,6 +30,7 @@ const AGENT_ROLES: Record<string, string> = {
   bob:    'Librarian & Researcher',
   kevin:  'Workshop Foreman',
   stuart: 'Treasury Keeper',
+  agnes:  'Studio Artist',
 };
 
 function StatusBadge({ status }: { status: string }) {

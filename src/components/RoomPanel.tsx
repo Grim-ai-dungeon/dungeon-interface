@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
-import type { GatewayMessage } from '../hooks/useGateway';
+import type { GatewayMessage, TreasuryData } from '../hooks/useGateway';
 import './RoomPanel.css';
 
 // ─── Agent color map ──────────────────────────────────────────────────────────
@@ -75,9 +75,12 @@ interface Props {
   gatewayConnected?: boolean;
   gatewayGenerating?: boolean;
   onOpenGatewayConfig?: () => void;
+  /** Treasury data (Stuart only) */
+  treasury?: TreasuryData | null;
+  onFetchTreasury?: () => Promise<void>;
 }
 
-type TabId = 'chat' | 'activity' | 'tasks';
+type TabId = 'chat' | 'activity' | 'tasks' | 'treasury';
 
 let taskCounter = 2000;
 
@@ -92,6 +95,8 @@ export function RoomPanel({
   gatewayConnected = false,
   gatewayGenerating = false,
   onOpenGatewayConfig,
+  treasury,
+  onFetchTreasury,
 }: Props) {
   const color = AGENT_COLORS[agent.id] ?? '#FF9933';
   const glow = color + '26'; // ~15% alpha for box-shadow
@@ -148,7 +153,8 @@ export function RoomPanel({
   }, []);
 
   // ── Tab state ──────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabId>('chat');
+  // For Stuart, default to treasury tab; all others default to chat
+  const [activeTab, setActiveTab] = useState<TabId>(agent.id === 'stuart' ? 'treasury' : 'chat');
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');
@@ -343,7 +349,9 @@ export function RoomPanel({
         <div className="rp-tabs">
           {([
             { id: 'chat',     icon: '💬', label: 'Chat' },
-            { id: 'activity', icon: '📋', label: 'Log' },
+            agent.id === 'stuart'
+              ? { id: 'treasury', icon: '📊', label: 'Treasury' }
+              : { id: 'activity', icon: '📋', label: 'Log' },
             { id: 'tasks',    icon: '📝', label: 'Tasks' },
           ] as { id: TabId; icon: string; label: string }[]).map(tab => (
             <button
@@ -375,11 +383,18 @@ export function RoomPanel({
               onOpenConfig={onOpenGatewayConfig}
             />
           )}
-          {activeTab === 'activity' && (
+          {activeTab === 'activity' && agent.id !== 'stuart' && (
             <ActivityTab
               entries={activityEntries}
               onVote={handleVote}
               isLive={gatewayConnected && !!gatewayMessages && gatewayMessages.length > 0}
+            />
+          )}
+          {activeTab === 'treasury' && agent.id === 'stuart' && (
+            <TreasuryTab
+              treasury={treasury ?? null}
+              connected={gatewayConnected}
+              onFetch={onFetchTreasury}
             />
           )}
           {activeTab === 'tasks' && (
@@ -617,6 +632,178 @@ function TasksTab({
           +
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── TreasuryTab ─────────────────────────────────────────────────────────────────────────────
+
+interface TreasuryTabProps {
+  treasury: TreasuryData | null;
+  connected: boolean;
+  onFetch?: () => Promise<void>;
+}
+
+function formatCost(usd: number): string {
+  if (usd === 0) return '$0.00';
+  if (usd < 0.001) return `$${usd.toFixed(6)}`;
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function shortModelName(model: string): string {
+  // Strip provider prefix (e.g. "anthropic/claude-3-5-sonnet" → "claude-3-5-sonnet")
+  const parts = model.split('/');
+  return parts[parts.length - 1];
+}
+
+function TreasuryTab({ treasury, connected, onFetch }: TreasuryTabProps) {
+  const [loading, setLoading] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (!onFetch || loading) return;
+    setLoading(true);
+    try {
+      await onFetch();
+    } finally {
+      setLoading(false);
+    }
+  }, [onFetch, loading]);
+
+  // Auto-fetch on mount if connected
+  useEffect(() => {
+    if (connected && onFetch && !treasury) {
+      void handleRefresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
+  if (!connected) {
+    return (
+      <div className="rp-treasury rp-treasury--disconnected">
+        <div className="rp-treasury-icon">🔒</div>
+        <div className="rp-treasury-msg">Connect to gateway to view treasury</div>
+      </div>
+    );
+  }
+
+  const maxCost = treasury?.byModel.length
+    ? Math.max(...treasury.byModel.map(m => m.costUsd), 0.000001)
+    : 1;
+
+  const fetchedTime = treasury?.fetchedAt
+    ? new Date(treasury.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
+
+  return (
+    <div className="rp-treasury">
+      {/* Header bar */}
+      <div className="rp-treasury-header">
+        <span className="rp-treasury-title">💰 ROYAL TREASURY</span>
+        <button
+          className={`rp-treasury-refresh${loading ? ' rp-treasury-refresh--spinning' : ''}`}
+          onClick={() => { void handleRefresh(); }}
+          title="Refresh treasury data"
+          disabled={loading}
+        >
+          ↻
+        </button>
+      </div>
+
+      {treasury?.error && !treasury.totalCostUsd && (
+        <div className="rp-treasury-error">
+          ⚠️ {treasury.error}
+        </div>
+      )}
+
+      {!treasury && (
+        <div className="rp-treasury-loading">
+          {loading ? '🔄 Counting coins…' : 'No data yet. Hit refresh.'}
+        </div>
+      )}
+
+      {treasury && (
+        <>
+          {/* Total spend */}
+          <div className="rp-treasury-total-row">
+            <div className="rp-treasury-coin-stack">
+              <span className="rp-treasury-coin">🪙</span>
+              <span className="rp-treasury-coin-label">TOTAL SPEND</span>
+            </div>
+            <div className="rp-treasury-total-cost">
+              {formatCost(treasury.totalCostUsd)}
+            </div>
+          </div>
+
+          {/* Token totals */}
+          <div className="rp-treasury-tokens-row">
+            <div className="rp-treasury-token-stat">
+              <span className="rp-treasury-token-icon">↗️</span>
+              <span className="rp-treasury-token-label">IN</span>
+              <span className="rp-treasury-token-val">{formatTokens(treasury.totalInputTokens)}</span>
+            </div>
+            <div className="rp-treasury-token-divider" />
+            <div className="rp-treasury-token-stat">
+              <span className="rp-treasury-token-icon">↘️</span>
+              <span className="rp-treasury-token-label">OUT</span>
+              <span className="rp-treasury-token-val">{formatTokens(treasury.totalOutputTokens)}</span>
+            </div>
+            <div className="rp-treasury-token-divider" />
+            <div className="rp-treasury-token-stat">
+              <span className="rp-treasury-token-icon">∑</span>
+              <span className="rp-treasury-token-label">TOTAL</span>
+              <span className="rp-treasury-token-val">{formatTokens(treasury.totalInputTokens + treasury.totalOutputTokens)}</span>
+            </div>
+          </div>
+
+          {/* Model breakdown */}
+          {treasury.byModel.length > 0 && (
+            <div className="rp-treasury-breakdown">
+              <div className="rp-treasury-breakdown-title">⚔️ EXPENDITURE BY MODEL</div>
+              <div className="rp-treasury-model-list">
+                {treasury.byModel
+                  .slice()
+                  .sort((a, b) => b.costUsd - a.costUsd)
+                  .map((m, i) => {
+                    const barPct = maxCost > 0 ? Math.max(2, (m.costUsd / maxCost) * 100) : 2;
+                    return (
+                      <div key={i} className="rp-treasury-model-entry">
+                        <div className="rp-treasury-model-name" title={m.model}>
+                          {shortModelName(m.model)}
+                        </div>
+                        <div className="rp-treasury-model-bar-wrap">
+                          <div
+                            className="rp-treasury-model-bar"
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                        <div className="rp-treasury-model-cost">
+                          {formatCost(m.costUsd)}
+                        </div>
+                        <div className="rp-treasury-model-tokens">
+                          {formatTokens(m.inputTokens + m.outputTokens)}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Timestamp */}
+          {fetchedTime && (
+            <div className="rp-treasury-footer">
+              Last fetched: {fetchedTime}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

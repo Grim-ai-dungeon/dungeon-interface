@@ -238,3 +238,16 @@
   -webkit-box-orient: vertical;
   text-overflow: ellipsis;
 }
+
+/* Treasury cost display for Stuart's card */
+.lsb-treasury-cost {
+  font-size: 10px;
+  color: #FFD700;
+  text-shadow: 0 0 6px #FFD70055;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
+}

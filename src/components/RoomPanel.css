@@ -646,3 +646,250 @@
 
 .rp-task-add-btn:hover:not(:disabled) { background: rgba(255,153,51,0.22); }
 .rp-task-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ─── TreasuryTab ─────────────────────────────────────────────────────────── */
+
+.rp-treasury {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  height: 100%;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(20,14,0,0.95) 0%, rgba(10,8,0,0.98) 100%);
+  color: #e8c84a;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.rp-treasury--disconnected {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.rp-treasury-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 10px #FFD70066);
+}
+
+.rp-treasury-msg {
+  color: #7a6a2a;
+  font-size: 12px;
+  text-align: center;
+  max-width: 160px;
+  line-height: 1.5;
+}
+
+/* Header */
+.rp-treasury-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,215,0,0.2);
+  padding-bottom: 7px;
+}
+
+.rp-treasury-title {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  color: #FFD700;
+  text-shadow: 0 0 8px #FFD70066;
+}
+
+.rp-treasury-refresh {
+  background: rgba(255,215,0,0.08);
+  border: 1px solid rgba(255,215,0,0.25);
+  border-radius: 3px;
+  color: #FFD700;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 7px;
+  transition: background 0.15s, transform 0.15s;
+  line-height: 1;
+}
+
+.rp-treasury-refresh:hover:not(:disabled) {
+  background: rgba(255,215,0,0.18);
+}
+
+.rp-treasury-refresh--spinning {
+  animation: treasury-spin 0.8s linear infinite;
+}
+
+@keyframes treasury-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Total cost */
+.rp-treasury-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,215,0,0.07);
+  border: 1px solid rgba(255,215,0,0.22);
+  border-radius: 5px;
+  padding: 8px 12px;
+}
+
+.rp-treasury-coin-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rp-treasury-coin {
+  font-size: 20px;
+  filter: drop-shadow(0 0 6px #FFD70099);
+}
+
+.rp-treasury-coin-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #9a8030;
+}
+
+.rp-treasury-total-cost {
+  font-size: 22px;
+  font-weight: bold;
+  color: #FFD700;
+  text-shadow: 0 0 12px #FFD70088;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Token row */
+.rp-treasury-tokens-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,215,0,0.04);
+  border: 1px solid rgba(255,215,0,0.12);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.rp-treasury-token-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 2px;
+}
+
+.rp-treasury-token-icon {
+  font-size: 13px;
+}
+
+.rp-treasury-token-label {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: #7a6a2a;
+}
+
+.rp-treasury-token-val {
+  font-size: 13px;
+  color: #e8c84a;
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-treasury-token-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255,215,0,0.15);
+  flex-shrink: 0;
+}
+
+/* Model breakdown */
+.rp-treasury-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rp-treasury-breakdown-title {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #9a8030;
+  border-bottom: 1px solid rgba(255,215,0,0.1);
+  padding-bottom: 4px;
+}
+
+.rp-treasury-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rp-treasury-model-entry {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.rp-treasury-model-name {
+  color: #c9a83a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.rp-treasury-model-bar-wrap {
+  background: rgba(255,215,0,0.08);
+  border-radius: 2px;
+  height: 8px;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.rp-treasury-model-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8B6914, #FFD700);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 4px #FFD70055;
+}
+
+.rp-treasury-model-cost {
+  color: #FFD700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 10px;
+  text-align: right;
+}
+
+.rp-treasury-model-tokens {
+  color: #7a6a2a;
+  font-size: 9px;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 30px;
+}
+
+/* Footer / error / loading */
+.rp-treasury-footer {
+  font-size: 9px;
+  color: #5a5028;
+  text-align: right;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.rp-treasury-error {
+  background: rgba(255,80,0,0.1);
+  border: 1px solid rgba(255,80,0,0.3);
+  border-radius: 4px;
+  color: #ff8855;
+  font-size: 10px;
+  padding: 6px 8px;
+}
+
+.rp-treasury-loading {
+  color: #7a6a2a;
+  font-size: 11px;
+  text-align: center;
+  padding: 20px 0;
+}

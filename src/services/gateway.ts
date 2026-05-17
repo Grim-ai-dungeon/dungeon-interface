@@ -112,6 +112,18 @@ class GatewayClient {
     return this.request('chat.abort', { sessionKey });
   }
 
+  async getUsageCost(startDate?: string, endDate?: string): Promise<unknown> {
+    return this.request('usage.cost', { startDate, endDate });
+  }
+
+  async getUsageStatus(): Promise<unknown> {
+    return this.request('usage.status', {});
+  }
+
+  async getModels(): Promise<unknown> {
+    return this.request('models.list', { view: 'configured' });
+  }
+
   on(handler: EventHandler): () => void {
     this.eventListeners.push(handler);
     return () => {

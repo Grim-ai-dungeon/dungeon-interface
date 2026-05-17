@@ -17,6 +17,24 @@ type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export type AgentRunStatus = 'idle' | 'running' | 'error';
 
+// ─── Treasury types ────────────────────────────────────────────────────────────
+
+export interface ModelCostEntry {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+export interface TreasuryData {
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  byModel: ModelCostEntry[];
+  fetchedAt: number;
+  error?: string;
+}
+
 interface UseGatewayReturn {
   connected: boolean;
   status: ConnectionStatus;
@@ -27,6 +45,8 @@ interface UseGatewayReturn {
   messages: Record<string, GatewayMessage[]>;
   generatingAgents: Set<string>;
   agentStatuses: Record<string, AgentRunStatus>;
+  fetchTreasury: () => Promise<void>;
+  treasury: TreasuryData | null;
 }
 
 // ─── Session key mapping ────────────────────────────────────────────────────────
@@ -90,6 +110,11 @@ export function useGateway(): UseGatewayReturn {
   const [messages, setMessages] = useState<Record<string, GatewayMessage[]>>({});
   const [generatingAgents, setGeneratingAgents] = useState<Set<string>>(new Set());
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentRunStatus>>({});
+  const [treasury, setTreasury] = useState<TreasuryData | null>(null);
+
+  // Cache: prevent spamming gateway
+  const treasuryCacheRef = useRef<number>(0);
+  const TREASURY_CACHE_MS = 30_000; // 30 seconds
 
   // Track partial (streaming) messages per session key
   const streamBuffers = useRef<Map<string, { id: string; text: string }>>(new Map());
@@ -323,6 +348,117 @@ export function useGateway(): UseGatewayReturn {
     setAgentStatuses(prev => ({ ...prev, [agentId]: 'idle' }));
   }, []);
 
+  // ── Treasury fetch ────────────────────────────────────────────────────────
+
+  const fetchTreasury = useCallback(async (): Promise<void> => {
+    const now = Date.now();
+    if (now - treasuryCacheRef.current < TREASURY_CACHE_MS) return;
+    treasuryCacheRef.current = now;
+
+    try {
+      const [costRaw] = await Promise.allSettled([
+        gateway.getUsageCost(),
+      ]);
+
+      // Parse cost data — handle various possible response shapes
+      let totalCostUsd = 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      const byModel: ModelCostEntry[] = [];
+
+      if (costRaw.status === 'fulfilled' && costRaw.value) {
+        const data = costRaw.value as Record<string, unknown>;
+
+        // Try flat shape: { totalCostUsd, inputTokens, outputTokens, models: [...] }
+        if (typeof data.totalCostUsd === 'number') totalCostUsd = data.totalCostUsd;
+        else if (typeof data.total === 'number') totalCostUsd = data.total;
+        else if (typeof data.cost === 'number') totalCostUsd = data.cost;
+        else if (typeof data.totalCost === 'number') totalCostUsd = data.totalCost;
+
+        if (typeof data.inputTokens === 'number') totalInputTokens = data.inputTokens;
+        else if (typeof data.totalInputTokens === 'number') totalInputTokens = data.totalInputTokens;
+
+        if (typeof data.outputTokens === 'number') totalOutputTokens = data.outputTokens;
+        else if (typeof data.totalOutputTokens === 'number') totalOutputTokens = data.totalOutputTokens;
+
+        // Try models breakdown: { models: { [modelId]: { cost, inputTokens, outputTokens } } }
+        // or { breakdown: [...] } or { byModel: [...] }
+        const modelsRaw =
+          data.models ?? data.breakdown ?? data.byModel ?? data.sessions ?? null;
+
+        if (modelsRaw && typeof modelsRaw === 'object') {
+          if (Array.isArray(modelsRaw)) {
+            for (const entry of modelsRaw) {
+              if (!entry || typeof entry !== 'object') continue;
+              const e = entry as Record<string, unknown>;
+              const model = String(e.model ?? e.modelId ?? e.id ?? 'unknown');
+              const costEntry: ModelCostEntry = {
+                model,
+                inputTokens: Number(e.inputTokens ?? e.input_tokens ?? 0),
+                outputTokens: Number(e.outputTokens ?? e.output_tokens ?? 0),
+                costUsd: Number(e.cost ?? e.costUsd ?? e.totalCost ?? 0),
+              };
+              byModel.push(costEntry);
+            }
+          } else {
+            // Object map: { "gpt-4": { cost: 0.12 }, ... }
+            for (const [modelKey, val] of Object.entries(modelsRaw as Record<string, unknown>)) {
+              if (!val || typeof val !== 'object') continue;
+              const v = val as Record<string, unknown>;
+              const costEntry: ModelCostEntry = {
+                model: modelKey,
+                inputTokens: Number(v.inputTokens ?? v.input_tokens ?? 0),
+                outputTokens: Number(v.outputTokens ?? v.output_tokens ?? 0),
+                costUsd: Number(v.cost ?? v.costUsd ?? v.totalCost ?? 0),
+              };
+              byModel.push(costEntry);
+            }
+          }
+        }
+
+        // If no model breakdown but we have totals, create a synthetic entry
+        if (byModel.length === 0 && (totalCostUsd > 0 || totalInputTokens > 0)) {
+          byModel.push({
+            model: 'total',
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            costUsd: totalCostUsd,
+          });
+        }
+
+        // Recompute totals from model breakdown if not explicitly provided
+        if (totalCostUsd === 0 && byModel.length > 0) {
+          totalCostUsd = byModel.reduce((s, m) => s + m.costUsd, 0);
+        }
+        if (totalInputTokens === 0 && byModel.length > 0) {
+          totalInputTokens = byModel.reduce((s, m) => s + m.inputTokens, 0);
+        }
+        if (totalOutputTokens === 0 && byModel.length > 0) {
+          totalOutputTokens = byModel.reduce((s, m) => s + m.outputTokens, 0);
+        }
+      }
+
+      setTreasury({
+        totalCostUsd,
+        totalInputTokens,
+        totalOutputTokens,
+        byModel,
+        fetchedAt: Date.now(),
+      });
+    } catch (err) {
+      console.warn('[useGateway] fetchTreasury error:', err);
+      setTreasury(prev => ({
+        totalCostUsd: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        byModel: [],
+        fetchedAt: Date.now(),
+        error: err instanceof Error ? err.message : String(err),
+        ...(prev ?? {}),
+      }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     connected: status === 'connected',
     status,
@@ -333,6 +469,8 @@ export function useGateway(): UseGatewayReturn {
     messages,
     generatingAgents,
     agentStatuses,
+    fetchTreasury,
+    treasury,
   };
 }
 

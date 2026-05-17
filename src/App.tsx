@@ -210,6 +210,8 @@ function App() {
     messages: gatewayMessages,
     generatingAgents,
     agentStatuses,
+    fetchTreasury,
+    treasury,
   } = useGateway();
 
   // ── Sync agent status + currentTask from real gateway data ──────────────
@@ -476,6 +478,7 @@ function App() {
             gatewayStatus={gatewayStatus}
             onGatewayConfigOpen={() => setShowGatewayConfig(true)}
             agentStatuses={agentStatuses}
+            treasury={treasury}
           />
 
           {/* Map container */}
@@ -514,6 +517,8 @@ function App() {
             gatewayConnected={gatewayConnected}
             gatewayGenerating={generatingAgents.has(selectedAgent.id)}
             onOpenGatewayConfig={() => setShowGatewayConfig(true)}
+            treasury={treasury}
+            onFetchTreasury={fetchTreasury}
           />
         )}
       </div>

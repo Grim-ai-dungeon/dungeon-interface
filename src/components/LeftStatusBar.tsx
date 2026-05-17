@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { AgentId, AgentInfo } from '../types';
-import type { AgentRunStatus } from '../hooks/useGateway';
+import type { AgentRunStatus, TreasuryData } from '../hooks/useGateway';
 import './LeftStatusBar.css';
 
 // Room accent colors mirroring the dungeon map palette
@@ -23,6 +23,8 @@ interface Props {
   onGatewayConfigOpen?: () => void;
   /** Real per-agent status from gateway */
   agentStatuses?: Record<string, AgentRunStatus>;
+  /** Treasury data for Stuart's card cost summary */
+  treasury?: TreasuryData | null;
 }
 
 function statusDotClass(agentStatus: AgentInfo['status'], runStatus?: AgentRunStatus, gatewayConnected?: boolean): string {
@@ -53,7 +55,7 @@ function statusLabel(agentStatus: AgentInfo['status'], runStatus?: AgentRunStatu
   }
 }
 
-export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses }: Props) {
+export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses, treasury }: Props) {
   const gwConnected = gatewayStatus === 'connected';
   const gwDot = gwConnected ? '🟢' :
                 gatewayStatus === 'connecting' ? '🟡' :
@@ -104,8 +106,17 @@ export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus
               <div className="lsb-status-label" data-status={runStatus ?? agent.status}>
                 {label}
               </div>
-              {agent.currentTask && (
-                <div className="lsb-task">{agent.currentTask}</div>
+              {/* Stuart: show live treasury cost instead of generic task */}
+              {agent.id === 'stuart' && gwConnected && treasury ? (
+                <div className="lsb-treasury-cost">
+                  💰 {treasury.totalCostUsd > 0
+                    ? `$${treasury.totalCostUsd.toFixed(4)}`
+                    : 'fetching…'}
+                </div>
+              ) : (
+                agent.currentTask && (
+                  <div className="lsb-task">{agent.currentTask}</div>
+                )
               )}
             </button>
           );

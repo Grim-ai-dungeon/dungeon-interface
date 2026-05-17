@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+// When running inside Tauri (tauri dev), use port 1420 as Tauri requires.
+// For standalone `npm run dev`, use the standard Vite default (5173).
+const isTauri = !!host || !!process.env.TAURI_ENV_TARGET_TRIPLE;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -12,10 +15,11 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
-    strictPort: true,
+    // Use port 1420 (strictPort) when Tauri is driving; otherwise fall back to
+    // Vite's default 5173 so plain `npm run dev` "just works" for the Overlord.
+    port: isTauri ? 1420 : 5173,
+    strictPort: isTauri,
     host: host || false,
     hmr: host
       ? {

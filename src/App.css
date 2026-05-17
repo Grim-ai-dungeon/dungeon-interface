@@ -26,6 +26,8 @@
   --green:       #44ff88;
   --red:         #CC3333;
   --blue:        #99CCFF;
+  --cyan:        #00F5FF;
+  --cyan-dim:    #00AACC;
   --font-title:  'Georgia', 'Times New Roman', serif;
   --font-mono:   'Courier New', 'Lucida Console', monospace;
   --font-ui:     'Segoe UI', 'Inter', system-ui, sans-serif;
@@ -199,7 +201,7 @@ body {
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 8px 16px;
   background: rgba(10, 8, 4, 0.98);
   border-bottom: 1px solid rgb(var(--torch-rgb) / 0.3);
@@ -455,6 +457,78 @@ body {
   bottom: 0; left: 0; right: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgb(var(--torch-rgb) / 0.5), rgba(255, 215, 0, 0.3), transparent);
+}
+
+/* Animated scan line sweeping downward */
+.hud-scan {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--torch-rgb) / 0.4), transparent);
+  pointer-events: none;
+  animation: hud-scan-sweep 6s linear infinite;
+  z-index: 1;
+}
+
+@keyframes hud-scan-sweep {
+  0%   { top: 0%;   opacity: 0; }
+  5%   { opacity: 0.8; }
+  90%  { opacity: 0.5; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* System online badge */
+.hud-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 3px 7px;
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+.hud-badge--online {
+  color: #00cc66;
+  border: 1px solid rgba(0, 204, 102, 0.3);
+  background: rgba(0, 204, 102, 0.06);
+  animation: hud-badge-pulse 3s ease-in-out infinite;
+}
+
+@keyframes hud-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* Brussels clock block */
+.hud-clock-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.hud-clock-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(255, 153, 51, 0.4);
+  letter-spacing: 0.2em;
+}
+
+.hud-clock-time {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--torch);
+  text-shadow: 0 0 8px rgb(var(--torch-rgb) / 0.4);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.hud-clock-date {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(245, 230, 211, 0.5);
+  letter-spacing: 0.04em;
 }
 
 /* ══════════════════════════════════════════════════════════════

@@ -17,6 +17,8 @@ const AGENT_COLORS: Record<AgentId, string> = {
 interface Props {
   agents: AgentInfo[];
   selectedId: AgentId | null;
+  /** IDs of all currently open windows (for multi-selection highlight) */
+  openWindowIds?: AgentId[];
   onSelectAgent: (id: AgentId) => void;
   /** Gateway connection status for the sidebar indicator */
   gatewayStatus?: 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -64,11 +66,13 @@ const AGENT_ROOM_NUMBERS: Record<AgentId, number> = {
   agnes:  5,
 };
 
-export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses }: Props) {
+export function LeftStatusBar({ agents, selectedId, openWindowIds, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses }: Props) {
   const gwConnected = gatewayStatus === 'connected';
   const gwDot = gwConnected ? '🟢' :
                 gatewayStatus === 'connecting' ? '🟡' :
                 gatewayStatus === 'error' ? '🔴' : '⚫';
+  // An agent card is "selected" if it's either the topmost active window OR any open window
+  const isWindowOpen = (id: AgentId) => openWindowIds ? openWindowIds.includes(id) : selectedId === id;
 
   // Compute stats for header row
   const totalAgents = agents.length;
@@ -111,10 +115,10 @@ export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus
           return (
             <button
               key={agent.id}
-              className={`lsb-card${selectedId === agent.id ? ' lsb-card--selected' : ''}`}
+              className={`lsb-card${isWindowOpen(agent.id) ? ' lsb-card--selected' : ''}`}
               onClick={() => onSelectAgent(agent.id)}
               title={`${agent.name} — Idle`}
-              style={selectedId === agent.id ? {
+              style={isWindowOpen(agent.id) ? {
                 '--agent-color': AGENT_COLORS[agent.id],
                 borderColor: AGENT_COLORS[agent.id],
                 boxShadow: `0 0 8px ${AGENT_COLORS[agent.id]}44, inset 0 0 12px ${AGENT_COLORS[agent.id]}10`,

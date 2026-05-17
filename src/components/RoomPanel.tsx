@@ -1,4 +1,4 @@
-// ─── RoomPanel.tsx — Floating draggable room panel ────────────────────────────
+// ─── RoomPanel.tsx - Floating draggable room panel ────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
@@ -252,7 +252,7 @@ export function RoomPanel({
         id: fakeId,
         time,
         agentId: agent.id,
-        msg: prefix + (m.text.length > 120 ? m.text.slice(0, 120) + '…' : m.text),
+        msg: prefix + (m.text.length > 120 ? m.text.slice(0, 120) + '...' : m.text),
         type: msgType,
         vote: activityVotes[fakeId],
       };
@@ -377,6 +377,47 @@ export function RoomPanel({
     setTasks(prev => prev.filter(t => !t.done));
   }, []);
 
+  // ── Resize state ──────────────────────────────────────────────────────────
+  const [panelSize, setPanelSize] = useState<{ width: number; height: number } | null>(null);
+  const resizeState = useRef<{ resizing: boolean; startX: number; startY: number; startW: number; startH: number }>(
+    { resizing: false, startX: 0, startY: 0, startW: 580, startH: 400 }
+  );
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onBringToFront) onBringToFront();
+    const el = panelRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    resizeState.current = {
+      resizing: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: rect.width,
+      startH: rect.height,
+    };
+
+    const onMove = (me: MouseEvent) => {
+      if (!resizeState.current.resizing) return;
+      const dx = me.clientX - resizeState.current.startX;
+      const dy = me.clientY - resizeState.current.startY;
+      setPanelSize({
+        width:  Math.max(400, resizeState.current.startW + dx),
+        height: Math.max(320, resizeState.current.startH + dy),
+      });
+    };
+
+    const onUp = () => {
+      resizeState.current.resizing = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [onBringToFront]);
+
   // ── Panel style ────────────────────────────────────────────────────────────
   const panelStyle: React.CSSProperties = {
     ['--rp-color' as string]: color,
@@ -388,6 +429,11 @@ export function RoomPanel({
     panelStyle.left = position.left;
     panelStyle.top  = position.top;
     panelStyle.transform = 'none';
+  }
+
+  if (panelSize) {
+    panelStyle.width  = panelSize.width;
+    panelStyle.height = panelSize.height;
   }
 
   const statusDotClass =
@@ -412,9 +458,9 @@ export function RoomPanel({
           <span className="rp-emoji" style={{ filter: `drop-shadow(0 0 6px ${color})` }}>
             {agent.emoji}
           </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span className="rp-title">{agent.name}’s {agent.role}</span>
-            <span className="rp-node-id">NODE::{agent.id.toUpperCase()}</span>
+          <div className="rp-terminal-badge">
+            <span className="rp-title">{agent.name}'s {agent.role}</span>
+            <span className="rp-node-id">TERMINAL·{agent.id.toUpperCase()}·{agent.status.toUpperCase()}</span>
           </div>
         </div>
         <div className="rp-titlebar-right">
@@ -457,7 +503,7 @@ export function RoomPanel({
         </div>
 
         {/* Tab content */}
-        <div className="rp-content">
+        <div className="rp-content" onClick={() => { if (onBringToFront) onBringToFront(); }}>
           {activeTab === 'chat' && (
             <ChatTab
               messages={messages}
@@ -507,6 +553,25 @@ export function RoomPanel({
           )}
         </div>
       </div>
+
+      {/* ── Resize handle (bottom-right) ── */}
+      <div
+        className="rp-resize-handle"
+        onMouseDown={handleResizeMouseDown}
+        aria-hidden="true"
+        title="Drag to resize"
+      />
+
+      {/* ── Status footer bar ── */}
+      <div className="rp-status-footer">
+        <span className="rp-footer-item">{agent.model ? agent.model.replace(/^.*\//, '') : 'no-model'}</span>
+        <span className="rp-footer-sep">/</span>
+        <span className="rp-footer-item rp-footer-item--role">{agent.role}</span>
+        <span className="rp-footer-flex" />
+        <span className={`rp-footer-status rp-footer-status--${agent.status === 'active' ? 'active' : agent.status === 'error' ? 'error' : 'idle'}`}>
+          {agent.status === 'active' ? '● RUNNING' : agent.status === 'error' ? '⚠ ERROR' : '○ IDLE'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -533,6 +598,14 @@ function ChatTab({
 }: ChatTabProps) {
   return (
     <div className="rp-chat">
+      {/* Tab sub-header */}
+      <div className="rp-tab-header">
+        <span className="rp-tab-header-label">💬 Chat Interface</span>
+        <span className="rp-tab-header-sep" />
+        <span style={{ fontSize: '8px', letterSpacing: '1px', color: connected ? '#44ff88' : '#cc3333', opacity: 0.7 }}>
+          {connected ? '● LIVE' : '○ OFFLINE'}
+        </span>
+      </div>
       {/* Not-connected banner */}
       {!connected && (
         <div className="rp-chat-disconnected">
@@ -547,7 +620,7 @@ function ChatTab({
       <div className="rp-chat-messages">
         {messages.length === 0 ? (
           <div className="rp-chat-empty">
-            {connected ? 'Speak, and the agent shall respond…' : 'Connect to the gateway to start chatting.'}
+            {connected ? 'Speak, and the agent shall respond...' : 'Connect to the gateway to start chatting.'}
           </div>
         ) : (
           messages.map(msg => (
@@ -575,7 +648,7 @@ function ChatTab({
           ref={chatInputRef}
           type="text"
           className="rp-chat-input"
-          placeholder={connected ? 'Send a command…' : 'Gateway not connected'}
+          placeholder={connected ? 'Send a command...' : 'Gateway not connected'}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={onKeyDown}
@@ -587,7 +660,7 @@ function ChatTab({
           onClick={onSend}
           disabled={!chatInput.trim() || !connected || generating}
         >
-          {generating ? '…' : '▶'}
+          {generating ? '...' : '▶'}
         </button>
       </div>
     </div>
@@ -605,11 +678,12 @@ interface ActivityTabProps {
 function ActivityTab({ entries, onVote, isLive }: ActivityTabProps) {
   return (
     <div className="rp-activity">
-      {isLive && (
-        <div className="rp-activity-banner rp-activity-banner--live">
-          🟢 Live session history
-        </div>
-      )}
+      {/* Tab sub-header */}
+      <div className="rp-tab-header">
+        <span className="rp-tab-header-label">📋 Activity Log</span>
+        <span className="rp-tab-header-sep" />
+        {isLive && <span style={{ fontSize: '8px', letterSpacing: '1px', color: '#44ff88', opacity: 0.7 }}>● LIVE</span>}
+      </div>
       <div className="rp-activity-list">
         {entries.length === 0 ? (
           <div className="rp-activity-empty">No activity logged yet.</div>
@@ -689,9 +763,17 @@ function TasksTab({
 
   return (
     <div className="rp-tasks">
+      {/* Tab sub-header */}
+      <div className="rp-tab-header">
+        <span className="rp-tab-header-label">📝 Task Queue</span>
+        <span className="rp-tab-header-sep" />
+        <span style={{ fontSize: '8px', letterSpacing: '1px', color: pendingTasks.length > 0 ? '#ccaa22' : '#44aa66', opacity: 0.7 }}>
+          {pendingTasks.length} PENDING
+        </span>
+      </div>
       <div className="rp-task-list">
         {tasks.length === 0 ? (
-          <div className="rp-task-empty">No tasks assigned — add one below.</div>
+          <div className="rp-task-empty">No tasks assigned - add one below.</div>
         ) : (
           orderedTasks.map((task, idx) => {
             const overdue = isOverdue(task.dueDate) && !task.done;
@@ -768,7 +850,7 @@ function TasksTab({
         <input
           type="text"
           className="rp-task-input"
-          placeholder="New task…"
+          placeholder="New task..."
           value={taskInput}
           onChange={e => setTaskInput(e.target.value)}
           onKeyDown={onKeyDown}
@@ -868,7 +950,11 @@ function TreasuryTab({ treasury, connected, onFetch }: TreasuryTabProps) {
 
   return (
     <div className="rp-treasury">
-      {/* Header bar */}
+      {/* Tab sub-header */}
+      <div className="rp-tab-header" style={{ margin: '-10px -12px 0', borderBottom: '1px solid rgba(255,215,0,0.12)', background: 'rgba(0,0,0,0.35)' }}>
+        <span className="rp-tab-header-label" style={{ color: '#FFD700', opacity: 0.55 }}>💰 Royal Treasury</span>
+        <span className="rp-tab-header-sep" style={{ background: 'linear-gradient(90deg, rgba(255,215,0,0.15), transparent)' }} />
+      </div>
       <div className="rp-treasury-header">
         <span className="rp-treasury-title">💰 ROYAL TREASURY</span>
         <button
@@ -889,7 +975,7 @@ function TreasuryTab({ treasury, connected, onFetch }: TreasuryTabProps) {
 
       {!treasury && (
         <div className="rp-treasury-loading">
-          {loading ? '🔄 Counting coins…' : 'No data yet. Hit refresh.'}
+          {loading ? '🔄 Counting coins...' : 'No data yet. Hit refresh.'}
         </div>
       )}
 

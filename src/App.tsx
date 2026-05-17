@@ -248,7 +248,11 @@ function App() {
   // globalLog kept for future use (will be wired to room panels)
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
   void globalLog; // referenced for future panel use
-  const [selectedId, setSelectedId] = useState<AgentId | null>(null);
+  // Multi-window state: track open windows and their z-order
+  const [openWindowIds, setOpenWindowIds] = useState<AgentId[]>([]);
+  const [windowZOrder, setWindowZOrder] = useState<AgentId[]>([]);
+  // Compatibility: selectedId derived for map highlight (topmost open window)
+  const selectedId = windowZOrder.length > 0 ? windowZOrder[windowZOrder.length - 1] : null;
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   void ocStatus; // kept for health-check polling
   const [isScrying, setIsScrying] = useState(false);
@@ -415,14 +419,16 @@ function App() {
 
     setCustomRooms(prev => prev.filter(r => r.id !== agentId));
     setAgents(prev => prev.filter(a => a.id !== agentId));
-    if (selectedId === agentId) setSelectedId(null);
+    // Close the window if it's open
+    setOpenWindowIds(prev => prev.filter(x => x !== agentId));
+    setWindowZOrder(prev => prev.filter(x => x !== agentId));
 
     // Remove from localStorage
     const stored = loadCustomAgents().filter(c => c.id !== agentId);
     saveCustomAgents(stored);
 
     addLog('grim', `A chamber was sealed. One fewer minion walks these halls.`, 'warn');
-  }, [selectedId, addLog]);
+  }, [addLog]);
 
   // ── Simulation engine — rotating tasks + live activity feed ──────────────
   useEffect(() => {
@@ -551,9 +557,28 @@ function App() {
     return () => { clearInterval(t2); };
   }, []);
 
+  // ── Bring window to front ───────────────────────────────────────────────────
+  const handleBringToFront = useCallback((id: AgentId) => {
+    setWindowZOrder(prev => {
+      const without = prev.filter(x => x !== id);
+      return [...without, id];
+    });
+  }, []);
+
   // ── Room click handler ──────────────────────────────────────────────────────
   const handleRoomClick = useCallback((id: AgentId) => {
-    setSelectedId(prev => (prev === id ? null : id));
+    setOpenWindowIds(prev => {
+      if (prev.includes(id)) {
+        // Window already open — just bring to front
+        handleBringToFront(id);
+        return prev;
+      }
+      return [...prev, id];
+    });
+    setWindowZOrder(prev => {
+      const without = prev.filter(x => x !== id);
+      return [...without, id];
+    });
     addLog(id, `Chamber accessed by the Overlord.`, 'info');
     // Flash a dispatch pulse from Grim toward the clicked room
     if (pulseHandleRef.current) {
@@ -562,7 +587,7 @@ function App() {
         if (pulseHandleRef.current) pulseHandleRef.current.fire(id, 'dispatch');
       }, 180);
     }
-  }, [addLog]);
+  }, [addLog, handleBringToFront]);
 
   // ── Command send (kept for future panel use) ────────────────────────────────
   const handleSendCommand = useCallback((agentId: AgentId, cmd: string) => {
@@ -589,10 +614,13 @@ function App() {
   void handleSendCommand; // reserved for future panel API integration
 
   // ── Close panel ─────────────────────────────────────────────────────────────
-  const handleClose = useCallback(() => setSelectedId(null), []);
+  const handleClose = useCallback((id: AgentId) => {
+    setOpenWindowIds(prev => prev.filter(x => x !== id));
+    setWindowZOrder(prev => prev.filter(x => x !== id));
+  }, []);
   const handleHover = useCallback((_id: AgentId | null) => { /* no-op, handled in canvas */ }, []);
 
-  // ── Keyboard navigation: 1-4 to select rooms, Escape to close ─────────────
+  // ── Keyboard navigation: 1-5 to open rooms, Escape to close topmost ────────
   useEffect(() => {
     const roomOrder: string[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
     const handleKey = (e: KeyboardEvent) => {
@@ -601,12 +629,18 @@ function App() {
       if (!isNaN(idx) && idx >= 0 && idx < roomOrder.length) {
         handleRoomClick(roomOrder[idx]);
       } else if (e.key === 'Escape') {
-        handleClose();
+        // Close the topmost window
+        setWindowZOrder(prev => {
+          if (prev.length === 0) return prev;
+          const topId = prev[prev.length - 1];
+          setOpenWindowIds(ids => ids.filter(x => x !== topId));
+          return prev.slice(0, -1);
+        });
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handleRoomClick, handleClose]);
+  }, [handleRoomClick]);
 
   // ── Dungeon ambient events — periodic atmospheric flavor ───────────────────
   useEffect(() => {
@@ -635,8 +669,13 @@ function App() {
     };
   }, [addLog]); // pulseHandleRef is a stable ref — no dep needed
 
-  // ── Selected agent ──────────────────────────────────────────────────────────
-  const selectedAgent = selectedId ? (agents.find(a => a.id === selectedId) ?? null) : null;
+  // ── Open window agents ──────────────────────────────────────────────────────
+  const openWindowAgents = openWindowIds
+    .map(id => agents.find(a => a.id === id))
+    .filter((a): a is AgentInfo => !!a);
+
+  // Base z-index for room panels — well above map, below modals
+  const BASE_Z = 500;
 
   return (
     <>
@@ -651,6 +690,7 @@ function App() {
           <LeftStatusBar
             agents={agents}
             selectedId={selectedId}
+            openWindowIds={openWindowIds}
             onSelectAgent={handleRoomClick}
             gatewayStatus={gatewayStatus}
             onGatewayConfigOpen={() => setShowGatewayConfig(true)}
@@ -681,23 +721,33 @@ function App() {
           </div>
         </div>
 
-        {/* Floating room panel — no backdrop, non-blocking */}
-        {selectedAgent && (
-          <RoomPanel
-            agent={selectedAgent}
-            onClose={handleClose}
-            gatewaySendMessage={gatewaySendMessage}
-            gatewayGetHistory={gatewayGetHistory}
-            gatewayMessages={gatewayMessages[selectedAgent.id]}
-            gatewayConnected={gatewayConnected}
-            gatewayGenerating={generatingAgents.has(selectedAgent.id)}
-            onOpenGatewayConfig={() => setShowGatewayConfig(true)}
-            treasury={treasury}
-            onFetchTreasury={fetchTreasury}
-            onDeleteAgent={handleDeleteAgent}
-            isCustomAgent={!(DEFAULT_AGENT_IDS as readonly string[]).includes(selectedAgent.id)}
-          />
-        )}
+        {/* Floating room panels — one per open window, non-blocking */}
+        {openWindowAgents.map((agent) => {
+          const zIndex = BASE_Z + windowZOrder.indexOf(agent.id);
+          // Stagger initial position so windows don't fully overlap
+          const openOrder = openWindowIds.indexOf(agent.id);
+          return (
+            <RoomPanel
+              key={agent.id}
+              agent={agent}
+              onClose={() => handleClose(agent.id)}
+              onBringToFront={() => handleBringToFront(agent.id)}
+              zIndex={zIndex}
+              stackOffset={openOrder}
+              isTopmost={windowZOrder[windowZOrder.length - 1] === agent.id}
+              gatewaySendMessage={gatewaySendMessage}
+              gatewayGetHistory={gatewayGetHistory}
+              gatewayMessages={gatewayMessages[agent.id]}
+              gatewayConnected={gatewayConnected}
+              gatewayGenerating={generatingAgents.has(agent.id)}
+              onOpenGatewayConfig={() => setShowGatewayConfig(true)}
+              treasury={treasury}
+              onFetchTreasury={fetchTreasury}
+              onDeleteAgent={handleDeleteAgent}
+              isCustomAgent={!(DEFAULT_AGENT_IDS as readonly string[]).includes(agent.id)}
+            />
+          );
+        })}
       </div>
 
       {/* Gateway Config Modal */}

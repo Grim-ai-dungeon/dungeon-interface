@@ -158,15 +158,18 @@
   100% { transform: translate(-50%,-50%) scale(1);                               filter: brightness(1); }
 }
 
-/* After position is set (dragged), use a simpler fade */
+/* After position is set (dragged), use a proper CRT scan-in */
 .room-panel[style*="transform: none"] {
-  animation: rp-appear-positioned 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: rp-appear-positioned 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center center;
 }
 
 @keyframes rp-appear-positioned {
-  0%   { opacity: 0; filter: brightness(3); }
-  20%  { opacity: 1; filter: brightness(1.5); }
-  100% { opacity: 1; filter: brightness(1); }
+  0%   { opacity: 0;   clip-path: inset(50% 0 50% 0); filter: brightness(5) saturate(0); }
+  18%  { opacity: 1;   clip-path: inset(5% 0 5% 0);   filter: brightness(2.2); }
+  55%  { opacity: 1;   clip-path: inset(0 0 0 0);       filter: brightness(1.12); }
+  75%  { opacity: 1;   clip-path: inset(0 0 0 0);       filter: brightness(1.04); }
+  100% { opacity: 1;   clip-path: inset(0 0 0 0);       filter: brightness(1); }
 }
 
 /* Non-topmost panels: dimmed; hover recovers focus signal */

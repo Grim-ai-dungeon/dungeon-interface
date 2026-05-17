@@ -1,6 +1,6 @@
 // ─── LeftStatusBar.tsx — Compact agent status sidebar ────────────────────────
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { AgentId, AgentInfo } from '../types';
 import type { AgentRunStatus, TreasuryData } from '../hooks/useGateway';
 import './LeftStatusBar.css';
@@ -66,7 +66,66 @@ const AGENT_ROOM_NUMBERS: Record<AgentId, number> = {
   agnes:  5,
 };
 
-export function LeftStatusBar({ agents, selectedId, openWindowIds, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses }: Props) {
+// ─── ActivityBar — animated progress strip for active agents ────────────────
+
+function ActivityBar({ active }: { active: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef = useRef<number>(0);
+  const offsetRef = useRef<number>(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    if (!active) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    let cancelled = false;
+    function draw() {
+      if (cancelled || !ctx || !canvas) return;
+      offsetRef.current = (offsetRef.current + 0.8) % (canvas.width * 2);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Base fill
+      ctx.fillStyle = 'rgba(0,255,136,0.08)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Moving bright pulse
+      const grad = ctx.createLinearGradient(offsetRef.current - canvas.width, 0, offsetRef.current, 0);
+      grad.addColorStop(0, 'rgba(0,255,136,0)');
+      grad.addColorStop(0.45, 'rgba(0,255,136,0)');
+      grad.addColorStop(0.6, 'rgba(0,255,136,0.55)');
+      grad.addColorStop(0.75, 'rgba(180,255,220,0.85)');
+      grad.addColorStop(0.85, 'rgba(0,255,136,0.55)');
+      grad.addColorStop(1, 'rgba(0,255,136,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      frameRef.current = requestAnimationFrame(draw);
+    }
+
+    draw();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameRef.current);
+    };
+  }, [active]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="lsb-activity-bar"
+      width={190}
+      height={3}
+    />
+  );
+}
+
+export function LeftStatusBar({ agents, selectedId, openWindowIds, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses, treasury }: Props) {
   const gwConnected = gatewayStatus === 'connected';
   const gwDot = gwConnected ? '🟢' :
                 gatewayStatus === 'connecting' ? '🟡' :
@@ -112,32 +171,77 @@ export function LeftStatusBar({ agents, selectedId, openWindowIds, onSelectAgent
           const dotClass = statusDotClass(agent.status, runStatus, gwConnected);
           const label = statusLabel(agent.status, runStatus, gwConnected);
           const roomNum = AGENT_ROOM_NUMBERS[agent.id] ?? '';
+          const isActive = gwConnected ? runStatus === 'running' : agent.status === 'active';
+          const isError = gwConnected ? runStatus === 'error' : agent.status === 'error';
+          const agentColor = AGENT_COLORS[agent.id] ?? '#ffa700';
+
+          // Truncate currentTask for card preview
+          const taskPreview = agent.currentTask
+            ? (agent.currentTask.length > 28 ? agent.currentTask.slice(0, 28) + '…' : agent.currentTask)
+            : null;
+
+          // For Stuart: show cost if connected
+          const stuartCost = agent.id === 'stuart' && gwConnected && treasury
+            ? `$${treasury.totalCostUsd.toFixed(4)}`
+            : null;
+
           return (
             <button
               key={agent.id}
-              className={`lsb-card${isWindowOpen(agent.id) ? ' lsb-card--selected' : ''}`}
+              className={[
+                'lsb-card',
+                isWindowOpen(agent.id) ? 'lsb-card--selected' : '',
+                isActive ? 'lsb-card--active' : '',
+                isError ? 'lsb-card--error' : '',
+              ].filter(Boolean).join(' ')}
               onClick={() => onSelectAgent(agent.id)}
-              title={`${agent.name} — Idle`}
-              style={isWindowOpen(agent.id) ? {
-                '--agent-color': AGENT_COLORS[agent.id],
-                borderColor: AGENT_COLORS[agent.id],
-                boxShadow: `0 0 8px ${AGENT_COLORS[agent.id]}44, inset 0 0 12px ${AGENT_COLORS[agent.id]}10`,
-              } as React.CSSProperties : undefined}
+              title={`${agent.name} — ${agent.currentTask ?? label}`}
+              style={{
+                '--agent-color': agentColor,
+              } as React.CSSProperties}
             >
+              {/* Keyboard shortcut badge */}
               {roomNum && <span className="lsb-room-badge">{roomNum}</span>}
+
+              {/* Top row: emoji + name + dot */}
               <div className="lsb-card-top">
                 <span className="lsb-emoji">{agent.emoji}</span>
-                <div className="lsb-name-row">
-                  <span className="lsb-name">{agent.name.toUpperCase()}</span>
-                  <span className={dotClass} />
+                <div className="lsb-name-col">
+                  <div className="lsb-name-row">
+                    <span className="lsb-name">{agent.name.toUpperCase()}</span>
+                    <span className={dotClass} />
+                  </div>
+                  <div className="lsb-role">{agent.role}</div>
                 </div>
               </div>
-              <div className="lsb-role">{agent.role}</div>
-              {agent.model && (
-                <div className="lsb-model">{agent.model.replace(/^.*\//,'')}</div>
+
+              {/* Current task preview */}
+              {taskPreview && (
+                <div className="lsb-task-preview">
+                  <span className="lsb-task-arrow">▸</span>
+                  <span className="lsb-task-text">{taskPreview}</span>
+                </div>
               )}
-              <div className="lsb-status-label" data-status={runStatus ?? agent.status}>
-                {label}
+
+              {/* Stuart special: treasury cost */}
+              {stuartCost && (
+                <div className="lsb-cost-chip">
+                  <span className="lsb-cost-icon">🪙</span>
+                  <span className="lsb-cost-val">{stuartCost}</span>
+                </div>
+              )}
+
+              {/* Model tag */}
+              {agent.model && (
+                <div className="lsb-model">{agent.model.replace(/^.*\//, '')}</div>
+              )}
+
+              {/* Status label + activity bar */}
+              <div className="lsb-footer-row">
+                <div className="lsb-status-label" data-status={runStatus ?? agent.status}>
+                  {label}
+                </div>
+                {isActive && <ActivityBar active={isActive} />}
               </div>
             </button>
           );

@@ -17,6 +17,9 @@ interface Props {
   agents: AgentInfo[];
   selectedId: AgentId | null;
   onSelectAgent: (id: AgentId) => void;
+  /** Gateway connection status for the sidebar indicator */
+  gatewayStatus?: 'disconnected' | 'connecting' | 'connected' | 'error';
+  onGatewayConfigOpen?: () => void;
 }
 
 function statusDotClass(status: AgentInfo['status']): string {
@@ -35,12 +38,24 @@ function statusLabel(status: AgentInfo['status']): string {
   }
 }
 
-export function LeftStatusBar({ agents, selectedId, onSelectAgent }: Props) {
+export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen }: Props) {
+  const gwDot = gatewayStatus === 'connected' ? '🟢' :
+                gatewayStatus === 'connecting' ? '🟡' :
+                gatewayStatus === 'error' ? '🔴' : '⚫';
+
   return (
     <aside className="lsb-root">
       <div className="lsb-header">
         <span className="lsb-header-icon">⚔</span>
         <span className="lsb-header-text">AGENTS</span>
+        <button
+          className="lsb-gateway-btn"
+          onClick={onGatewayConfigOpen}
+          title={`Gateway: ${gatewayStatus ?? 'disconnected'}`}
+        >
+          <span className="lsb-gateway-dot">{gwDot}</span>
+          <span className="lsb-gateway-gear">⚙</span>
+        </button>
       </div>
       <div className="lsb-list">
         {agents.map(agent => (

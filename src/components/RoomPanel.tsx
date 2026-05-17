@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
+import type { GatewayMessage } from '../hooks/useGateway';
 import './RoomPanel.css';
 
 // ─── Agent color map ──────────────────────────────────────────────────────────
@@ -47,9 +48,10 @@ const DEFAULT_TASKS: Record<string, { text: string; priority: 'high' | 'med' | '
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ChatMessage {
-  id: number;
-  sender: 'user' | 'agent';
+  id: string | number;
+  sender: 'user' | 'agent' | 'system';
   text: string;
+  streaming?: boolean;
 }
 
 interface ActivityEntryState extends ActivityEntry {
@@ -66,16 +68,31 @@ interface Task {
 interface Props {
   agent: AgentInfo;
   onClose: () => void;
+  /** Gateway integration props */
+  gatewaySendMessage?: (agentId: string, text: string) => Promise<void>;
+  gatewayGetHistory?: (agentId: string) => Promise<void>;
+  gatewayMessages?: GatewayMessage[];
+  gatewayConnected?: boolean;
+  gatewayGenerating?: boolean;
+  onOpenGatewayConfig?: () => void;
 }
 
 type TabId = 'chat' | 'activity' | 'tasks';
 
-let msgCounter = 1000;
 let taskCounter = 2000;
 
 // ─── RoomPanel ────────────────────────────────────────────────────────────────
 
-export function RoomPanel({ agent, onClose }: Props) {
+export function RoomPanel({
+  agent,
+  onClose,
+  gatewaySendMessage,
+  gatewayGetHistory,
+  gatewayMessages,
+  gatewayConnected = false,
+  gatewayGenerating = false,
+  onOpenGatewayConfig,
+}: Props) {
   const color = AGENT_COLORS[agent.id] ?? '#FF9933';
   const glow = color + '26'; // ~15% alpha for box-shadow
 
@@ -134,10 +151,17 @@ export function RoomPanel({ agent, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('chat');
 
   // ── Chat state ─────────────────────────────────────────────────────────────
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Convert gateway messages to local ChatMessage format
+  const messages: ChatMessage[] = (gatewayMessages ?? []).map(m => ({
+    id: m.id,
+    sender: m.role === 'user' ? 'user' : m.role === 'agent' ? 'agent' : 'system',
+    text: m.text,
+    streaming: m.streaming,
+  }));
 
   const scrollChatToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -145,28 +169,30 @@ export function RoomPanel({ agent, onClose }: Props) {
 
   useEffect(() => {
     scrollChatToBottom();
-  }, [messages, scrollChatToBottom]);
+  }, [messages.length, scrollChatToBottom]);
 
-  const handleChatSend = useCallback(() => {
+  // Load history when the chat tab becomes active and we're connected
+  useEffect(() => {
+    if (activeTab === 'chat' && gatewayConnected && gatewayGetHistory) {
+      gatewayGetHistory(agent.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, gatewayConnected]);
+
+  const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
     if (!text) return;
-    const userMsg: ChatMessage = { id: ++msgCounter, sender: 'user', text };
-    setMessages(prev => [...prev, userMsg]);
     setChatInput('');
 
-    // Simulated agent response
-    setTimeout(() => {
-      const agentMsg: ChatMessage = {
-        id: ++msgCounter,
-        sender: 'agent',
-        text: `[${agent.name}] Acknowledged: ${text}`,
-      };
-      setMessages(prev => [...prev, agentMsg]);
-    }, 1000);
-  }, [chatInput, agent.name]);
+    if (gatewaySendMessage && gatewayConnected) {
+      await gatewaySendMessage(agent.id, text);
+    } else {
+      // Fallback: show disconnected notice
+    }
+  }, [chatInput, agent.id, gatewaySendMessage, gatewayConnected]);
 
   const handleChatKey = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleChatSend();
+    if (e.key === 'Enter' && !e.shiftKey) { void handleChatSend(); }
     if (e.key === 'Escape') onClose();
   }, [handleChatSend, onClose]);
 
@@ -290,11 +316,14 @@ export function RoomPanel({ agent, onClose }: Props) {
               messages={messages}
               chatInput={chatInput}
               setChatInput={setChatInput}
-              onSend={handleChatSend}
+              onSend={() => { void handleChatSend(); }}
               onKeyDown={handleChatKey}
               chatInputRef={chatInputRef}
               chatEndRef={chatEndRef}
               agentName={agent.name}
+              connected={gatewayConnected}
+              generating={gatewayGenerating}
+              onOpenConfig={onOpenGatewayConfig}
             />
           )}
           {activeTab === 'activity' && (
@@ -333,27 +362,51 @@ interface ChatTabProps {
   chatInputRef: React.RefObject<HTMLInputElement>;
   chatEndRef: React.RefObject<HTMLDivElement>;
   agentName: string;
+  connected: boolean;
+  generating?: boolean;
+  onOpenConfig?: () => void;
 }
 
 function ChatTab({
   messages, chatInput, setChatInput, onSend, onKeyDown, chatInputRef, chatEndRef, agentName,
+  connected, generating, onOpenConfig,
 }: ChatTabProps) {
   return (
     <div className="rp-chat">
+      {/* Not-connected banner */}
+      {!connected && (
+        <div className="rp-chat-disconnected">
+          <span>⚡ Gateway not connected</span>
+          {onOpenConfig && (
+            <button className="rp-chat-connect-btn" onClick={onOpenConfig}>
+              Configure
+            </button>
+          )}
+        </div>
+      )}
       <div className="rp-chat-messages">
         {messages.length === 0 ? (
           <div className="rp-chat-empty">
-            Speak, and the agent shall respond…
+            {connected ? 'Speak, and the agent shall respond…' : 'Connect to the gateway to start chatting.'}
           </div>
         ) : (
           messages.map(msg => (
             <div key={msg.id} className={`rp-msg rp-msg--${msg.sender}`}>
               <span className="rp-msg-sender">
-                {msg.sender === 'user' ? 'You' : agentName}
+                {msg.sender === 'user' ? 'You' : msg.sender === 'agent' ? agentName : '⚙'}
               </span>
-              <span className="rp-msg-text">{msg.text}</span>
+              <span className={`rp-msg-text${msg.streaming ? ' rp-msg-text--streaming' : ''}`}>
+                {msg.text}
+                {msg.streaming && <span className="rp-msg-cursor">▌</span>}
+              </span>
             </div>
           ))
+        )}
+        {generating && !messages.some(m => m.streaming) && (
+          <div className="rp-msg rp-msg--agent">
+            <span className="rp-msg-sender">{agentName}</span>
+            <span className="rp-msg-text rp-msg-text--thinking">Thinking<span className="rp-msg-cursor">▌</span></span>
+          </div>
         )}
         <div ref={chatEndRef} />
       </div>
@@ -362,18 +415,19 @@ function ChatTab({
           ref={chatInputRef}
           type="text"
           className="rp-chat-input"
-          placeholder="Send a command…"
+          placeholder={connected ? 'Send a command…' : 'Gateway not connected'}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={onKeyDown}
+          disabled={!connected}
           autoFocus
         />
         <button
           className="rp-chat-send-btn"
           onClick={onSend}
-          disabled={!chatInput.trim()}
+          disabled={!chatInput.trim() || !connected || generating}
         >
-          ▶
+          {generating ? '…' : '▶'}
         </button>
       </div>
     </div>

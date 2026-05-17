@@ -9,6 +9,8 @@ import { DungeonHUD } from './components/DungeonHUD';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ScreenWatcher } from './components/ScreenWatcher';
 import { LeftStatusBar } from './components/LeftStatusBar';
+import { GatewayConfig } from './components/GatewayConfig';
+import { useGateway } from './hooks/useGateway';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 
 // ─── Dungeon ambient events — atmospheric flavor, fired periodically ──────────
@@ -196,7 +198,18 @@ function App() {
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [isScrying, setIsScrying] = useState(false);
   const [dataGeneratedAt, setDataGeneratedAt] = useState<number | null>(null);
+  const [showGatewayConfig, setShowGatewayConfig] = useState(false);
   const pulseHandleRef = useRef<PulseHandle | null>(null);
+
+  // ── Gateway hook ────────────────────────────────────────────────────────
+  const {
+    connected: gatewayConnected,
+    status: gatewayStatus,
+    sendMessage: gatewaySendMessage,
+    getHistory: gatewayGetHistory,
+    messages: gatewayMessages,
+    generatingAgents,
+  } = useGateway();
 
   const addLog = useCallback((agentId: AgentId, msg: string, type: ActivityEntry['type']) => {
     setGlobalLog(prev => [
@@ -433,6 +446,8 @@ function App() {
             agents={agents}
             selectedId={selectedId}
             onSelectAgent={handleRoomClick}
+            gatewayStatus={gatewayStatus}
+            onGatewayConfigOpen={() => setShowGatewayConfig(true)}
           />
 
           {/* Map container */}
@@ -465,9 +480,23 @@ function App() {
           <RoomPanel
             agent={selectedAgent}
             onClose={handleClose}
+            gatewaySendMessage={gatewaySendMessage}
+            gatewayGetHistory={gatewayGetHistory}
+            gatewayMessages={gatewayMessages[selectedAgent.id]}
+            gatewayConnected={gatewayConnected}
+            gatewayGenerating={generatingAgents.has(selectedAgent.id)}
+            onOpenGatewayConfig={() => setShowGatewayConfig(true)}
           />
         )}
       </div>
+
+      {/* Gateway Config Modal */}
+      {showGatewayConfig && (
+        <GatewayConfig
+          onClose={() => setShowGatewayConfig(false)}
+          status={gatewayStatus}
+        />
+      )}
 
       {/* Scrying Portal — Screen Watch overlay */}
       {isScrying && <ScreenWatcher onClose={() => setIsScrying(false)} />}

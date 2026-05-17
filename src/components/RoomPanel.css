@@ -208,6 +208,54 @@
   font-style: italic;
 }
 
+/* Gateway disconnected banner */
+.rp-chat-disconnected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 50, 50, 0.08);
+  border-bottom: 1px solid rgba(255, 50, 50, 0.2);
+  font-size: 11px;
+  color: #ff6666;
+  flex-shrink: 0;
+}
+.rp-chat-connect-btn {
+  background: rgba(255, 153, 51, 0.15);
+  border: 1px solid rgba(255, 153, 51, 0.4);
+  border-radius: 3px;
+  color: #FF9933;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 3px 8px;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.rp-chat-connect-btn:hover { background: rgba(255,153,51,0.25); }
+
+/* Streaming cursor blink */
+.rp-msg-cursor {
+  display: inline-block;
+  animation: rp-cursor-blink 1s steps(1) infinite;
+  color: var(--rp-color, #FF9933);
+  margin-left: 2px;
+}
+@keyframes rp-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.rp-msg-text--streaming { color: #ccc; }
+.rp-msg-text--thinking { color: #666; font-style: italic; }
+
+/* system message style */
+.rp-msg--system {
+  align-self: center;
+  background: rgba(100, 100, 100, 0.1);
+  border: 1px solid rgba(100, 100, 100, 0.15);
+}
+.rp-msg--system .rp-msg-sender { color: #666; }
+.rp-msg--system .rp-msg-text { color: #888; font-style: italic; font-size: 11px; }
+
 .rp-msg {
   display: flex;
   flex-direction: column;

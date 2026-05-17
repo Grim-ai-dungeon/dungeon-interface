@@ -35,7 +35,25 @@
   letter-spacing: 3px;
   color: #ffa700;
   opacity: 0.85;
+  flex: 1;
 }
+
+/* Gateway connection button */
+.lsb-gateway-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s;
+  opacity: 0.8;
+}
+.lsb-gateway-btn:hover { background: rgba(255,167,0,0.15); opacity: 1; }
+.lsb-gateway-dot { font-size: 8px; line-height: 1; }
+.lsb-gateway-gear { font-size: 11px; color: #888; }
 
 .lsb-list {
   flex: 1;

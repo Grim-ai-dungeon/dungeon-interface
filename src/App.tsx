@@ -250,8 +250,10 @@ function App() {
   void globalLog; // referenced for future panel use
   const [selectedId, setSelectedId] = useState<AgentId | null>(null);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  void ocStatus; // kept for health-check polling
   const [isScrying, setIsScrying] = useState(false);
   const [dataGeneratedAt, setDataGeneratedAt] = useState<number | null>(null);
+  void dataGeneratedAt; // polled for live sync data
   const [showGatewayConfig, setShowGatewayConfig] = useState(false);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -641,7 +643,7 @@ function App() {
       {isLoading && <LoadingOverlay onComplete={() => setIsLoading(false)} />}
       <div className={`dungeon-root${isLoading ? ' dungeon-root--hidden' : ''}`}>
         {/* HUD */}
-        <DungeonHUD agents={agents} ocStatus={ocStatus} dataGeneratedAt={dataGeneratedAt} onScryClick={() => setIsScrying(true)} />
+        <DungeonHUD />
 
         {/* Main area: left sidebar + map */}
         <div className="dungeon-body">
@@ -658,17 +660,6 @@ function App() {
 
           {/* Map container */}
           <div className="dungeon-map-wrap">
-            <div className="dungeon-map-label">
-            <span>⚔ DUNGEON MAP — 2D TOP-DOWN VIEW</span>
-            <span className="dungeon-kbd-hints">
-              <kbd>1</kbd>GRIM
-              <kbd>2</kbd>BOB
-              <kbd>3</kbd>KEVIN
-              <kbd>4</kbd>TREASURY
-              <kbd>5</kbd>AGNES
-              <kbd>ESC</kbd>CLOSE
-            </span>
-          </div>
             <div className="dungeon-map-canvas-wrap" style={{ position: 'relative' }}>
               <DungeonMapPixi
                 agents={agents}

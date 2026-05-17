@@ -233,6 +233,11 @@ body {
   font-size: 26px;
   filter: drop-shadow(0 0 8px rgba(255, 100, 0, 0.8));
   animation: flicker-glow 5s ease-in-out infinite;
+  display: inline-block;
+}
+
+.hud-dragon--flip {
+  transform: scaleX(-1);
 }
 
 @keyframes flicker-glow {

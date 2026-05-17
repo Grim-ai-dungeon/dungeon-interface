@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
-import { DungeonMap } from './components/DungeonMap';
+import { DungeonMapPixi } from './components/DungeonMapPixi';
 import type { PulseHandle } from './components/DungeonMap';
 import { SidePanel } from './components/SidePanel';
 import { DungeonHUD } from './components/DungeonHUD';
@@ -442,7 +442,7 @@ function App() {
             </span>
           </div>
             <div className="dungeon-map-canvas-wrap">
-              <DungeonMap
+              <DungeonMapPixi
                 agents={agents}
                 selectedId={selectedId}
                 onRoomClick={handleRoomClick}

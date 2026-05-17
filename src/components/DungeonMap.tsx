@@ -38,6 +38,13 @@ const ROOM_LABELS: Record<string, string> = {
   stuart: "TREASURY",
 };
 
+// ─── Zoom/Pan constants ───────────────────────────────────────────────────────
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 3.0;
+const DEFAULT_ZOOM = 1.0;
+const OVERVIEW_ZOOM_THRESHOLD = 0.8; // below this, show large overview labels
+const PAN_DRAG_THRESHOLD = 3; // pixels moved before treating as pan (not click)
+
 export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulseHandleRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
@@ -48,6 +55,22 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
   const lastDustRef = useRef<number>(0);
   const eventPulseRef = useRef<EventPulseSystem>(new EventPulseSystem());
   const prevTasksRef = useRef<Partial<Record<AgentId, string | undefined>>>({});
+
+  // ── Zoom / Pan state (refs — avoid re-renders on every wheel event) ─────────
+  const zoomRef = useRef<number>(DEFAULT_ZOOM);
+  const panXRef = useRef<number>(0);
+  const panYRef = useRef<number>(0);
+  // Smooth transition: target zoom for gentle lerp
+  const targetZoomRef = useRef<number>(DEFAULT_ZOOM);
+  const targetPanXRef = useRef<number>(0);
+  const targetPanYRef = useRef<number>(0);
+  // Overview label fade (0=hidden, 1=fully visible)
+  const overviewAlphaRef = useRef<number>(0);
+
+  // ── Drag / pan tracking ──────────────────────────────────────────────────────
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const totalDragRef = useRef<number>(0); // total px moved since mousedown
 
   // ── Expose imperative pulse handle ─────────────────────────────────────────
   useEffect(() => {
@@ -69,18 +92,31 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
     return map;
   }, [allTorches]);
 
-  // ── Hit test ──────────────────────────────────────────────────────────────
-  const getRoomAt = useCallback((canvasX: number, canvasY: number): AgentId | null => {
-    for (const room of ROOMS) {
-      const { px, py, w, h } = roomPixelBounds(room);
-      if (canvasX >= px && canvasX < px + w && canvasY >= py && canvasY < py + h) {
-        return room.id;
-      }
-    }
-    return null;
+  // ── Coordinate helpers accounting for zoom/pan ───────────────────────────
+  /**
+   * Convert a mouse event position to canvas-space coordinates,
+   * accounting for both CSS scaling and the current zoom/pan transform.
+   */
+  const toCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    // Scale from CSS pixels → canvas pixels
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cssX = (e.clientX - rect.left) * scaleX;
+    const cssY = (e.clientY - rect.top) * scaleY;
+    // Undo the zoom/pan transform: world = (canvas - pan) / zoom
+    const worldX = (cssX - panXRef.current) / zoomRef.current;
+    const worldY = (cssY - panYRef.current) / zoomRef.current;
+    return { x: worldX, y: worldY };
   }, []);
 
-  const toCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
+  /**
+   * Raw canvas-pixel position from mouse event (no zoom/pan applied).
+   * Used for drag tracking.
+   */
+  const toRawCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -92,25 +128,141 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
     };
   }, []);
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const { x, y } = toCanvasCoords(e);
-    const id = getRoomAt(x, y);
-    if (id) onRoomClick(id);
-  }, [toCanvasCoords, getRoomAt, onRoomClick]);
+  // ── Hit test ──────────────────────────────────────────────────────────────
+  const getRoomAt = useCallback((canvasX: number, canvasY: number): AgentId | null => {
+    for (const room of ROOMS) {
+      const { px, py, w, h } = roomPixelBounds(room);
+      if (canvasX >= px && canvasX < px + w && canvasY >= py && canvasY < py + h) {
+        return room.id;
+      }
+    }
+    return null;
+  }, []);
+
+  // ── Clamp pan so the dungeon can't be dragged completely off screen ────────
+  const clampPan = useCallback((px: number, py: number, zoom: number): { x: number; y: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: px, y: py };
+    const vw = canvas.width;
+    const vh = canvas.height;
+    const worldW = CANVAS_W * zoom;
+    const worldH = CANVAS_H * zoom;
+    // At min pan world-edge shouldn't move past viewport edge
+    const minX = Math.min(0, vw - worldW);
+    const maxX = Math.max(0, vw - worldW);
+    const minY = Math.min(0, vh - worldH);
+    const maxY = Math.max(0, vh - worldH);
+    return {
+      x: Math.max(minX, Math.min(maxX, px)),
+      y: Math.max(minY, Math.min(maxY, py)),
+    };
+  }, []);
+
+  // ── Wheel: zoom centered on cursor ────────────────────────────────────────
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cursorX = (e.clientX - rect.left) * scaleX;
+    const cursorY = (e.clientY - rect.top) * scaleY;
+
+    // ctrlKey = pinch-to-zoom on trackpad; treat as zoom
+    const delta = e.ctrlKey ? -e.deltaY * 0.02 : -e.deltaY * 0.001;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoomRef.current * (1 + delta)));
+
+    // Zoom centered on cursor:
+    // world point under cursor = (cursor - pan) / zoom  must stay constant
+    // newPan = cursor - worldPoint * newZoom
+    const worldX = (cursorX - panXRef.current) / zoomRef.current;
+    const worldY = (cursorY - panYRef.current) / zoomRef.current;
+    let newPanX = cursorX - worldX * newZoom;
+    let newPanY = cursorY - worldY * newZoom;
+    const clamped = clampPan(newPanX, newPanY, newZoom);
+    newPanX = clamped.x;
+    newPanY = clamped.y;
+
+    targetZoomRef.current = newZoom;
+    targetPanXRef.current = newPanX;
+    targetPanYRef.current = newPanY;
+  }, [clampPan]);
+
+  // Attach wheel listener imperatively so we can use { passive: false }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
+  // ── Mouse: pan via drag ───────────────────────────────────────────────────
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return; // left button only
+    const { x, y } = toRawCanvasCoords(e);
+    isDraggingRef.current = false;
+    totalDragRef.current = 0;
+    dragStartRef.current = { x, y, panX: panXRef.current, panY: panYRef.current };
+  }, [toRawCanvasCoords]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const { x, y } = toCanvasCoords(e);
-    const id = getRoomAt(x, y);
-    if (id !== hoveredIdRef.current) {
-      hoveredIdRef.current = id;
-      onRoomHover(id);
+    if (dragStartRef.current) {
+      const { x, y } = toRawCanvasCoords(e);
+      const dx = x - dragStartRef.current.x;
+      const dy = y - dragStartRef.current.y;
+      totalDragRef.current = Math.sqrt(dx * dx + dy * dy);
+
+      if (totalDragRef.current > PAN_DRAG_THRESHOLD) {
+        isDraggingRef.current = true;
+        const newPanX = dragStartRef.current.panX + dx;
+        const newPanY = dragStartRef.current.panY + dy;
+        const clamped = clampPan(newPanX, newPanY, zoomRef.current);
+        panXRef.current = clamped.x;
+        panYRef.current = clamped.y;
+        targetPanXRef.current = clamped.x;
+        targetPanYRef.current = clamped.y;
+      }
     }
-  }, [toCanvasCoords, getRoomAt, onRoomHover]);
+
+    // Only update hover when not actively panning
+    if (!isDraggingRef.current) {
+      const { x, y } = toCanvasCoords(e);
+      const id = getRoomAt(x, y);
+      if (id !== hoveredIdRef.current) {
+        hoveredIdRef.current = id;
+        onRoomHover(id);
+      }
+    }
+  }, [toRawCanvasCoords, toCanvasCoords, getRoomAt, onRoomHover, clampPan]);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const wasDragging = isDraggingRef.current;
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
+
+    if (!wasDragging) {
+      // It was a click, not a pan
+      const { x, y } = toCanvasCoords(e);
+      const id = getRoomAt(x, y);
+      if (id) onRoomClick(id);
+    }
+  }, [toCanvasCoords, getRoomAt, onRoomClick]);
 
   const handleMouseLeave = useCallback(() => {
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
     hoveredIdRef.current = null;
     onRoomHover(null);
   }, [onRoomHover]);
+
+  // ── Double-click: reset zoom/pan ──────────────────────────────────────────
+  const handleDoubleClick = useCallback(() => {
+    targetZoomRef.current = DEFAULT_ZOOM;
+    targetPanXRef.current = 0;
+    targetPanYRef.current = 0;
+  }, []);
 
   // ── Main render loop ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -124,6 +276,25 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
     function render() {
       if (!ctx) return;
       const now = Date.now();
+
+      // ── Lerp zoom/pan toward targets (smooth) ─────────────────────────────
+      const lerpFactor = 0.18;
+      zoomRef.current += (targetZoomRef.current - zoomRef.current) * lerpFactor;
+      panXRef.current += (targetPanXRef.current - panXRef.current) * lerpFactor;
+      panYRef.current += (targetPanYRef.current - panYRef.current) * lerpFactor;
+
+      // Snap to avoid jitter at rest
+      if (Math.abs(zoomRef.current - targetZoomRef.current) < 0.0005) zoomRef.current = targetZoomRef.current;
+      if (Math.abs(panXRef.current - targetPanXRef.current) < 0.1) panXRef.current = targetPanXRef.current;
+      if (Math.abs(panYRef.current - targetPanYRef.current) < 0.1) panYRef.current = targetPanYRef.current;
+
+      const zoom = zoomRef.current;
+
+      // ── Overview label fade ────────────────────────────────────────────────
+      const wantOverview = zoom <= OVERVIEW_ZOOM_THRESHOLD ? 1 : 0;
+      overviewAlphaRef.current += (wantOverview - overviewAlphaRef.current) * 0.08;
+      if (overviewAlphaRef.current < 0.005) overviewAlphaRef.current = 0;
+      if (overviewAlphaRef.current > 0.995) overviewAlphaRef.current = 1;
 
       // Seed dust motes periodically
       if (now - lastDustRef.current > 3000) {
@@ -183,7 +354,16 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
 
       ps.update(now);
 
-      // ── 1. Fill background ────────────────────────────────────────────────
+      // ── Clear entire canvas ───────────────────────────────────────────────
+      ctx.fillStyle = '#0B0C10';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // ── Apply zoom/pan transform ──────────────────────────────────────────
+      ctx.save();
+      ctx.translate(panXRef.current, panYRef.current);
+      ctx.scale(zoom, zoom);
+
+      // ── 1. Background (world space) ───────────────────────────────────────
       ctx.fillStyle = '#0B0C10';
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -235,7 +415,7 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
         const glowColor = ROOM_LABEL_COLORS[room.id] ?? '#FFA700';
         drawRoomBorder(ctx, px, py, w, h, isSelected || isHovered || isActive, glowColor);
 
-        // Label
+        // Label (existing bottom-of-room label — always shown at normal zoom)
         drawRoomLabel(ctx, room.id, px, py, w, h, isSelected, isHovered, glowColor, now);
 
         // Task ticker — show current task when agent is active
@@ -271,12 +451,9 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
       messengerRef.current.draw(ctx);
 
       // ── 6c. Event pulse system ────────────────────────────────────────────────
-      // Detect task changes on each frame tick and auto-fire pulses.
-      // Also handles imperative calls from App via pulseHandleRef.
       for (const agent of agents) {
         const prev = prevTasksRef.current[agent.id];
         if (prev !== undefined && prev !== agent.currentTask) {
-          // Task changed — fire a report pulse (minion → Grim) or dispatch from Grim
           const kind = agent.id === 'grim' ? 'dispatch' : 'report';
           eventPulseRef.current.fire(agent.id, kind);
         }
@@ -314,10 +491,16 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
         }
       }
 
+      // ── 9b. Overview room name labels (visible when zoomed out) ───────────
+      const oa = overviewAlphaRef.current;
+      if (oa > 0) {
+        drawOverviewLabels(ctx, oa, zoom, now);
+      }
+
       // ── 10. Dungeon breathing vignette ──────────────────────────────────────
       {
-        const breathe = 0.5 + Math.sin(now / 4200) * 0.5; // slow 4.2s cycle
-        const vigAlpha = 0.12 + breathe * 0.08; // 0.12..0.20 — barely visible
+        const breathe = 0.5 + Math.sin(now / 4200) * 0.5;
+        const vigAlpha = 0.12 + breathe * 0.08;
         ctx.save();
         const vg = ctx.createRadialGradient(
           CANVAS_W / 2, CANVAS_H / 2, CANVAS_H * 0.25,
@@ -329,6 +512,12 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
         ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
         ctx.restore();
       }
+
+      // ── End zoom/pan transform ────────────────────────────────────────────
+      ctx.restore();
+
+      // ── 11. HUD overlay (in screen space, outside transform) ──────────────
+      drawZoomIndicator(ctx, zoom, now);
 
       animFrameRef.current = requestAnimationFrame(render);
     }
@@ -342,12 +531,106 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
       ref={canvasRef}
       width={CANVAS_W}
       height={CANVAS_H}
-      style={{ width: '100%', height: '100%', display: 'block', cursor: 'pointer', imageRendering: 'pixelated' }}
-      onClick={handleClick}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        cursor: isDraggingRef.current ? 'grabbing' : 'pointer',
+        imageRendering: 'pixelated',
+      }}
+      onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onDoubleClick={handleDoubleClick}
     />
   );
+}
+
+// ─── Overview room labels (large, centered, visible when zoomed out) ──────────
+
+function drawOverviewLabels(
+  ctx: CanvasRenderingContext2D,
+  alpha: number,
+  zoom: number,
+  _now: number,
+): void {
+  for (const room of ROOMS) {
+    const { px, py, w, h } = roomPixelBounds(room);
+    const cx = px + w / 2;
+    const cy = py + h / 2;
+    const label = ROOM_LABELS[room.id] ?? room.id.toUpperCase();
+    const color = ROOM_LABEL_COLORS[room.id] ?? '#FFA700';
+    const [r, g, b] = hexToRGB(color);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Scale text inversely so it remains readable regardless of zoom
+    // At zoom=0.5 the label appears at ~24px; at zoom=0.3 it appears at ~28px (in screen space)
+    const baseSize = 18 / zoom;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Drop shadow / backdrop for legibility
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 12 / zoom;
+    ctx.fillStyle = `rgba(0,0,0,0.6)`;
+    const metrics = ctx.measureText(label);
+    // rough bounding box
+    const padX = 10 / zoom;
+    const padY = 6 / zoom;
+    const textW = metrics.width + padX * 2;
+    const textH = baseSize + padY * 2;
+    ctx.beginPath();
+    ctx.roundRect(cx - textW / 2, cy - textH / 2, textW, textH, 4 / zoom);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10 / zoom;
+    ctx.fillStyle = `rgba(${r},${g},${b},1)`;
+    ctx.font = `bold ${baseSize}px 'Courier New', monospace`;
+    ctx.fillText(label, cx, cy);
+
+    ctx.restore();
+  }
+}
+
+// ─── Zoom level indicator (HUD — drawn in screen space) ───────────────────────
+
+function drawZoomIndicator(
+  ctx: CanvasRenderingContext2D,
+  zoom: number,
+  _now: number,
+): void {
+  // Only show when not at default zoom
+  const diff = Math.abs(zoom - DEFAULT_ZOOM);
+  if (diff < 0.01) return;
+
+  const text = `${Math.round(zoom * 100)}%`;
+  const x = CANVAS_W - 12;
+  const y = CANVAS_H - 12;
+
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, diff * 4); // fade in as you zoom
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.font = "bold 11px 'Courier New', monospace";
+
+  // Background pill
+  const tw = ctx.measureText(text).width + 10;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.beginPath();
+  ctx.roundRect(x - tw, y - 16, tw + 4, 18, 3);
+  ctx.fill();
+
+  ctx.fillStyle = '#aaaaaa';
+  ctx.shadowColor = '#888';
+  ctx.shadowBlur = 4;
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }
 
 // ─── Room label ───────────────────────────────────────────────────────────────
@@ -446,7 +729,7 @@ function drawTaskTicker(
 
   // Task text — truncate to fit available width
   const maxW = barW - 18;
-  ctx.font = '8px \'Courier New\', monospace';
+  ctx.font = "8px 'Courier New', monospace";
   const fullText = task.toUpperCase();
   let displayText = fullText;
   while (ctx.measureText(displayText).width > maxW && displayText.length > 0) {

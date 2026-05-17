@@ -172,7 +172,7 @@ function drawGoggles(
   }
 }
 
-// ─── BOB — Librarian with magnifying glass ───────────────────────────────────
+// ─── BOB — CHONKY Librarian with magnifying glass ───────────────────────────
 
 function drawBob(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
   const { cx, cy, now, status } = opts;
@@ -181,20 +181,33 @@ function drawBob(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
   ctx.save();
   ctx.translate(cx, cy + bob);
 
-  // Body (minion yellow capsule)
-  drawCapsuleBody(ctx, 0, 0, 22, 30, '#FDCE2A');
+  // Body (wider, shorter — chonky minion capsule)
+  drawCapsuleBody(ctx, 0, 0, 28, 26, '#FDCE2A');
 
-  // Overalls (blue — classic librarian)
-  drawOveralls(ctx, 0, 6, 20, 16, '#3a6bbf');
+  // Belly bulge — extra rounded section mid-body for that chubby look
+  const bellyPulse = 1 + Math.sin(now / 1200) * 0.02; // very subtle breathing
+  ctx.fillStyle = '#FDCE2A';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 15 * bellyPulse, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Belly crease line
+  ctx.strokeStyle = 'rgba(200,140,0,0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 10, 3, 0, 0.1, Math.PI - 0.1);
+  ctx.stroke();
 
-  // Goggles (1 eye — Bob has one eye)
-  drawGoggles(ctx, 0, -8, 1, '#8BC34A', now);
+  // Overalls (blue — wider to match chonky body)
+  drawOveralls(ctx, 0, 5, 26, 14, '#3a6bbf');
 
-  // Magnifying glass
+  // Goggles (1 eye — Bob has one eye, repositioned for wider face)
+  drawGoggles(ctx, 0, -6, 1, '#8BC34A', now);
+
+  // Magnifying glass (adjusted for wider body)
   ctx.save();
   const glassAngle = status === 'active' ? Math.sin(now / 300) * 0.3 : 0;
-  const glassX = 13;
-  const glassY = status === 'active' ? -10 : 4;
+  const glassX = 16;
+  const glassY = status === 'active' ? -8 : 4;
   ctx.translate(glassX, glassY);
   ctx.rotate(glassAngle);
 
@@ -218,28 +231,47 @@ function drawBob(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
   ctx.stroke();
   ctx.restore();
 
-  // When active: little book held in other hand
+  // When active: little book held in other hand (adjusted for chonky width)
   if (status === 'active') {
     ctx.fillStyle = '#8B4513';
-    ctx.fillRect(-16, 2, 6, 8);
+    ctx.fillRect(-19, 1, 6, 8);
     ctx.fillStyle = '#cc3333';
-    ctx.fillRect(-15, 3, 4, 6);
+    ctx.fillRect(-18, 2, 4, 6);
     // Pages
     ctx.fillStyle = '#f5f5f0';
-    ctx.fillRect(-14.5, 3.5, 1.5, 5);
+    ctx.fillRect(-17.5, 2.5, 1.5, 5);
   }
 
   ctx.restore();
 }
 
 // ─── KEVIN — Workshop foreman, two eyes, stocky ──────────────────────────────
+// Kevin occasionally stumbles while working (every ~15 seconds, ~1.5s duration)
 
 function drawKevin(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
   const { cx, cy, now, status } = opts;
-  const bob = Math.sin(now / 500) * 2;
+
+  // ── Stumble logic ──────────────────────────────────────────────────────────
+  // Kevin stumbles every 15 seconds when active; stumble lasts 1.5 seconds.
+  const STUMBLE_PERIOD = 15000; // ms between stumble starts
+  const STUMBLE_DURATION = 1500; // ms the stumble lasts
+  const stumblePhase = now % STUMBLE_PERIOD;
+  const isStumbling = status === 'active' && stumblePhase < STUMBLE_DURATION;
+  // t goes 0→1 over the stumble window; eased as a sine arch for cartoony feel
+  const stumbleT = isStumbling ? stumblePhase / STUMBLE_DURATION : 0;
+  // sine arch: 0 → peak → 0, with overshoot for bounce-back
+  const stumbleSine = Math.sin(stumbleT * Math.PI);
+  const stumbleRotation = isStumbling ? stumbleSine * 0.44 : 0; // ~25 deg max
+  const stumbleDrop = isStumbling ? stumbleSine * 7 : 0; // drops down
+  // Wrench flies upward during stumble
+  const wrenchFly = isStumbling ? -stumbleSine * 12 : 0;
+
+  // Normal bob when not stumbling
+  const bob = isStumbling ? 0 : Math.sin(now / 500) * 2;
 
   ctx.save();
-  ctx.translate(cx, cy + bob);
+  ctx.translate(cx, cy + bob + stumbleDrop);
+  if (isStumbling) ctx.rotate(stumbleRotation);
 
   // Kevin is taller/stockier
   drawCapsuleBody(ctx, 0, 2, 26, 34, '#FDCE2A');
@@ -260,11 +292,11 @@ function drawKevin(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
   ctx.fillStyle = '#e0b000';
   ctx.fillRect(-13, -18, 26, 2);
 
-  // Wrench
+  // Wrench (flies up during stumble)
   ctx.save();
-  const wrenchAngle = status === 'active' ? Math.sin(now / 180) * 0.7 : 0.2;
-  ctx.translate(15, 2);
-  ctx.rotate(wrenchAngle);
+  const wrenchAngle = status === 'active' && !isStumbling ? Math.sin(now / 180) * 0.7 : 0.2;
+  ctx.translate(15, 2 + wrenchFly);
+  ctx.rotate(wrenchAngle + (isStumbling ? stumbleSine * -0.8 : 0));
 
   ctx.strokeStyle = '#aaa';
   ctx.lineWidth = 2.5;
@@ -289,8 +321,8 @@ function drawKevin(ctx: CanvasRenderingContext2D, opts: SpriteOptions): void {
 
   ctx.restore();
 
-  // Active: gear spinning above head
-  if (status === 'active') {
+  // Active: gear spinning above head (hide during stumble peak so it looks like it fell)
+  if (status === 'active' && stumbleSine < 0.6) {
     ctx.save();
     ctx.translate(-12, -18);
     ctx.rotate(now / 500);

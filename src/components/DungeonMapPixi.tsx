@@ -25,6 +25,9 @@ import type { AgentId, AgentInfo } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds } from '../dungeon/rooms';
 import type { PulseHandle } from './DungeonMap';
 import { TILE_SIZE } from '../dungeon/tiles';
+import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite } from '../pixi/PixiAgentSprites';
+import { PixiParticleSystem } from '../pixi/PixiParticles';
+import { PixiEventPulseSystem } from '../pixi/PixiEventPulse';
 
 // ─── 0x72 DungeonTileset II tile definitions ──────────────────────────────────
 // The tileset is 512×512 with 16×16 pixel tiles = 32×32 grid
@@ -128,6 +131,9 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const lightingLayerRef = useRef<Graphics | null>(null);
   const animFrameRef = useRef<number>(0);
   const hoveredIdRef = useRef<AgentId | null>(null);
+  const spriteContainersRef = useRef<Map<string, Container>>(new Map());
+  const particleSystemRef = useRef<PixiParticleSystem | null>(null);
+  const pulseSysRef = useRef<PixiEventPulseSystem | null>(null);
 
   // ── Zoom/Pan state ──────────────────────────────────────────────────────────
   const zoomRef = useRef(DEFAULT_ZOOM);
@@ -151,11 +157,25 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   // ── Canvas size tracking ────────────────────────────────────────────────────
   const canvasSizeRef = useRef({ w: 800, h: 600 });
 
-  // ── Expose pulse handle (no-op for now — Phase 2) ──────────────────────────
+  // ── Expose pulse handle ──────────────────────────────────────────────────
   useEffect(() => {
     if (pulseHandleRef) {
       pulseHandleRef.current = {
-        fire: (_agentId, _kind) => { /* Phase 2: particle pulses */ },
+        fire: (agentId, _kind) => {
+          const pulseSys = pulseSysRef.current;
+          if (!pulseSys) return;
+          // Fire pulse from Grim's room to the target agent's room
+          const grimRoom = ROOMS.find(r => r.id === 'grim');
+          const targetRoom = ROOMS.find(r => r.id === agentId);
+          if (!grimRoom || !targetRoom) return;
+          const from = roomCenter(grimRoom);
+          const to = roomCenter(targetRoom);
+          const ROOM_COLORS_MAP: Record<string, number> = {
+            grim: 0xFFA700, bob: 0x6699CC, kevin: 0xFF5522, stuart: 0xFFD700,
+          };
+          const color = ROOM_COLORS_MAP[agentId] ?? 0xffffff;
+          pulseSys.fire(from.cx, from.cy, to.cx, to.cy, color);
+        },
       };
     }
   }, [pulseHandleRef]);
@@ -215,6 +235,22 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       worldContainer.addChild(lightingLayer);
       lightingLayerRef.current = lightingLayer;
 
+      // ── Sprite containers for each agent ────────────────────────────────
+      const spriteLayer = new Container();
+      worldContainer.addChild(spriteLayer);
+      for (const room of ROOMS) {
+        const sc = new Container();
+        sc.label = `sprite_${room.id}`;
+        spriteLayer.addChild(sc);
+        spriteContainersRef.current.set(room.id, sc);
+      }
+
+      // ── Particle and event pulse systems ────────────────────────────────
+      const fxLayer = new Container();
+      worldContainer.addChild(fxLayer);
+      particleSystemRef.current = new PixiParticleSystem(fxLayer);
+      pulseSysRef.current = new PixiEventPulseSystem(fxLayer);
+
       // Center the dungeon initially
       centerDungeon(W, H);
 
@@ -229,7 +265,6 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
         const dt = time - lastTime;
         lastTime = time;
-        void dt;
 
         // Smooth zoom/pan
         const lerpSpeed = 0.14;
@@ -248,6 +283,19 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
         // Update lighting
         updateLighting(time);
+
+        // Draw minion sprites
+        updateAgentSprites(time / 1000);
+
+        // Update particles and pulses
+        if (particleSystemRef.current) {
+          particleSystemRef.current.update(dt);
+          particleSystemRef.current.draw();
+        }
+        if (pulseSysRef.current) {
+          pulseSysRef.current.update(dt);
+          pulseSysRef.current.draw();
+        }
       }
       animFrameRef.current = requestAnimationFrame(renderLoop);
     }
@@ -608,6 +656,24 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const midY = (seg.y + (seg.direction === 'v' ? seg.length / 2 : 0)) * TILE_SIZE;
       const corridorPulse = 0.1 * Math.sin(t * 2.1 + midX * 0.05);
       lg.circle(midX, midY, 20 + corridorPulse * 5).fill({ color: 0xFF8800, alpha: 0.06 });
+    }
+  }
+
+  // ── Update agent sprites in their room containers ────────────────────────
+  function updateAgentSprites(timeSec: number) {
+    for (const room of ROOMS) {
+      const sc = spriteContainersRef.current.get(room.id);
+      if (!sc) continue;
+      const agent = agentsRef.current.find(a => a.id === room.id);
+      const status = agent?.status ?? 'idle';
+      const selected = selectedIdRef.current === room.id;
+      const { cx, cy } = roomCenter(room);
+      switch (room.id) {
+        case 'grim':   drawGrimSprite(sc, cx, cy, timeSec, status, selected); break;
+        case 'bob':    drawBobSprite(sc, cx, cy, timeSec, status, selected); break;
+        case 'kevin':  drawKevinSprite(sc, cx, cy, timeSec, status, selected); break;
+        case 'stuart': drawStuartSprite(sc, cx, cy, timeSec, status, selected); break;
+      }
     }
   }
 

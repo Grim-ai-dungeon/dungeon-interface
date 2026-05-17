@@ -38,6 +38,14 @@ const ROOM_LABELS: Record<string, string> = {
   stuart: "TREASURY",
 };
 
+const ROOM_SHORTCUT: Record<string, number> = {
+  grim:   1,
+  bob:    2,
+  kevin:  3,
+  stuart: 4,
+  agnes:  5,
+};
+
 // ─── Zoom/Pan constants ───────────────────────────────────────────────────────
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.0;
@@ -484,14 +492,52 @@ export function DungeonMap({ agents, selectedId, onRoomClick, onRoomHover, pulse
         const hovRoom = ROOMS.find(r => r.id === hoveredIdRef.current);
         if (hovRoom) {
           const { px, py, w, h } = roomPixelBounds(hovRoom);
+          const hovColor = ROOM_LABEL_COLORS[hovRoom.id] ?? '#FFA700';
+          const [hr, hg, hb] = hexToRGB(hovColor);
           ctx.save();
-          ctx.fillStyle = 'rgba(255, 200, 100, 0.05)';
+          // Stronger fill tint
+          ctx.fillStyle = `rgba(${hr},${hg},${hb},0.09)`;
           ctx.fillRect(px, py, w, h);
+          // Animated pulsing border
+          const hoverPulse = 0.55 + Math.sin(now / 300) * 0.45;
+          ctx.strokeStyle = `rgba(${hr},${hg},${hb},${hoverPulse * 0.8})`;
+          ctx.lineWidth = 1.5;
+          ctx.shadowColor = hovColor;
+          ctx.shadowBlur = 10;
+          ctx.strokeRect(px + 1, py + 1, w - 2, h - 2);
+          ctx.shadowBlur = 0;
+          // Corner brackets
+          const bLen = 8;
+          ctx.strokeStyle = `rgba(${hr},${hg},${hb},${hoverPulse})`;
+          ctx.lineWidth = 2;
+          ctx.shadowColor = hovColor;
+          ctx.shadowBlur = 6;
+          const corners: [number, number, number, number][] = [
+            [px, py, 1, 1],
+            [px + w, py, -1, 1],
+            [px, py + h, 1, -1],
+            [px + w, py + h, -1, -1],
+          ];
+          for (const [cx2, cy2, dx, dy] of corners) {
+            ctx.beginPath();
+            ctx.moveTo(cx2 + dx * bLen, cy2);
+            ctx.lineTo(cx2, cy2);
+            ctx.lineTo(cx2, cy2 + dy * bLen);
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0;
           ctx.restore();
+
+          // ── Tooltip ─────────────────────────────────────────────────────────
+          const hovAgent = agents.find(a => a.id === hovRoom.id);
+          drawRoomTooltip(ctx, hovRoom.id, px, py, w, h, hovAgent ?? null, hovColor, zoom, now);
         }
       }
 
-      // ── 9b. Overview room name labels (visible when zoomed out) ───────────
+      // ── 9b. Keyboard shortcut badges on each room (always visible) ──────────
+      drawShortcutBadges(ctx, zoom, now);
+
+      // ── 9c. Overview room name labels (visible when zoomed out) ───────────
       const oa = overviewAlphaRef.current;
       if (oa > 0) {
         drawOverviewLabels(ctx, oa, zoom, now);
@@ -752,6 +798,201 @@ function hexToRGB(hex: string): [number, number, number] {
     parseInt(hex.slice(3, 5), 16),
     parseInt(hex.slice(5, 7), 16),
   ];
+}
+
+// ─── Keyboard shortcut badges (small [N] labels in room top-left corner) ────────
+// Shown at all zoom levels, fades to less visible when zoomed way in.
+
+function drawShortcutBadges(
+  ctx: CanvasRenderingContext2D,
+  zoom: number,
+  _now: number,
+): void {
+  // Only show when not super zoomed in (above 2.0 it gets cluttered)
+  const alpha = Math.min(1, Math.max(0, (1.8 - zoom) / 1.2));
+  if (alpha < 0.02) return;
+
+  for (const room of ROOMS) {
+    const shortcut = ROOM_SHORTCUT[room.id];
+    if (!shortcut) continue;
+    const { px, py } = roomPixelBounds(room);
+    const color = ROOM_LABEL_COLORS[room.id] ?? '#FFA700';
+    const [r, g, b] = hexToRGB(color);
+
+    const badgeX = px + 5;
+    const badgeY = py + 5;
+    const badgeSize = 12;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.6;
+
+    // Badge background
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.45)`;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeSize, badgeSize, 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Shortcut number
+    ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
+    ctx.font = `bold 8px 'Courier New', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(shortcut), badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 0.5);
+
+    ctx.restore();
+  }
+}
+
+// ─── Room hover tooltip (drawn in world-space, beside the hovered room) ────────
+
+function drawRoomTooltip(
+  ctx: CanvasRenderingContext2D,
+  id: string,
+  px: number, py: number, w: number, h: number,
+  agent: AgentInfo | null,
+  color: string,
+  zoom: number,
+  now: number,
+): void {
+  const label = ROOM_LABELS[id] ?? id.toUpperCase();
+  const shortcut = ROOM_SHORTCUT[id];
+  const [r, g, b] = hexToRGB(color);
+
+  // Lines of content
+  const statusText = agent
+    ? (agent.status === 'active' ? '● ACTIVE' : agent.status === 'error' ? '⚠ ERROR' : '○ IDLE')
+    : '○ IDLE';
+  const taskText = agent?.currentTask ?? null;
+  const modelText = agent?.model ? agent.model.replace(/^.*\//, '') : null;
+
+  // Measure tooltip width
+  const PADDING_X = 10;
+  const PADDING_Y = 8;
+  const LINE_H = 13;
+
+  ctx.save();
+  ctx.font = `bold 10px 'Courier New', monospace`;
+  const titleWidth = ctx.measureText(label).width;
+  ctx.font = `9px 'Courier New', monospace`;
+  const statusWidth = ctx.measureText(statusText).width + (shortcut ? ctx.measureText(`  [${shortcut}]`).width : 0);
+  const taskWidth = taskText ? ctx.measureText(taskText.toUpperCase().slice(0, 36)).width : 0;
+  const modelWidth = modelText ? ctx.measureText(modelText).width : 0;
+
+  // Number of lines: title, status, (task?), (model?)
+  let numLines = 2; // title + status
+  if (taskText) numLines++;
+  if (modelText) numLines++;
+
+  const tooltipW = Math.max(titleWidth, statusWidth, taskWidth, modelWidth) + PADDING_X * 2;
+  const tooltipH = PADDING_Y * 2 + numLines * LINE_H + (numLines - 1) * 3;
+
+  // Tooltip position: prefer right of room, but clamp to canvas
+  let tx = px + w + 8;
+  const ty = py + h / 2 - tooltipH / 2;
+  if (tx + tooltipW > CANVAS_W) {
+    tx = px - tooltipW - 8;
+  }
+  // Clamp vertical
+  const clampedTy = Math.max(4, Math.min(CANVAS_H - tooltipH - 4, ty));
+
+  // Scale font inversely with zoom so tooltip stays readable
+  // (at zoom 0.5 the tooltip in world coords is 2× bigger in screen px, so halve)
+  const scale = 1 / zoom;
+  ctx.save();
+  ctx.translate(tx, clampedTy);
+  ctx.scale(scale, scale);
+
+  const sw = tooltipW * zoom;
+  const sh = tooltipH * zoom;
+
+  // ── Background panel ──────────────────────────────────────────────────
+  ctx.fillStyle = 'rgba(6,5,14,0.92)';
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.55)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, sw, sh, 4);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+
+  // Top color accent bar
+  const accentH = 3;
+  const barGrad = ctx.createLinearGradient(0, 0, sw, 0);
+  barGrad.addColorStop(0, `rgba(${r},${g},${b},0.9)`);
+  barGrad.addColorStop(1, `rgba(${r},${g},${b},0.1)`);
+  ctx.fillStyle = barGrad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, sw, accentH, [4, 4, 0, 0]);
+  ctx.fill();
+
+  const padX = PADDING_X * zoom;
+  const padY = PADDING_Y * zoom;
+  const lineH = (LINE_H + 3) * zoom;
+
+  let lineY = padY + LINE_H * zoom * 0.85 + accentH;
+
+  // ── Title ────────────────────────────────────────────────────────────────────
+  ctx.font = `bold ${10 * zoom}px 'Courier New', monospace`;
+  ctx.fillStyle = `rgba(${r},${g},${b},1)`;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(label, padX, lineY);
+  ctx.shadowBlur = 0;
+  lineY += lineH;
+
+  // ── Divider ────────────────────────────────────────────────────────────────
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.2)`;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(padX, lineY - lineH * 0.35);
+  ctx.lineTo(sw - padX, lineY - lineH * 0.35);
+  ctx.stroke();
+
+  // ── Status line ────────────────────────────────────────────────────────────
+  const statusColor =
+    agent?.status === 'active' ? '#00ff88' :
+    agent?.status === 'error'  ? '#ff4444' :
+    '#667788';
+  ctx.font = `bold ${9 * zoom}px 'Courier New', monospace`;
+  ctx.fillStyle = statusColor;
+  ctx.fillText(statusText, padX, lineY);
+
+  // Keyboard shortcut badge on the right
+  if (shortcut) {
+    const badgePulse = 0.5 + Math.sin(now / 800) * 0.3;
+    ctx.fillStyle = `rgba(${r},${g},${b},${badgePulse})`;
+    ctx.font = `bold ${9 * zoom}px 'Courier New', monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`[${shortcut}]`, sw - padX, lineY);
+    ctx.textAlign = 'left';
+  }
+  lineY += lineH;
+
+  // ── Task line (if any) ───────────────────────────────────────────────────
+  if (taskText) {
+    ctx.font = `${8.5 * zoom}px 'Courier New', monospace`;
+    ctx.fillStyle = 'rgba(180,160,120,0.8)';
+    const truncated = taskText.length > 36 ? taskText.slice(0, 34) + '…' : taskText;
+    ctx.fillText(truncated.toUpperCase(), padX, lineY);
+    lineY += lineH;
+  }
+
+  // ── Model line (if any) ───────────────────────────────────────────────────
+  if (modelText) {
+    ctx.font = `italic ${8 * zoom}px 'Courier New', monospace`;
+    ctx.fillStyle = 'rgba(100,120,140,0.7)';
+    ctx.fillText(modelText, padX, lineY);
+  }
+
+  ctx.restore(); // undo scale+translate
+  ctx.restore(); // undo outer save
 }
 
 // ─── Room decorations ─────────────────────────────────────────────────────────

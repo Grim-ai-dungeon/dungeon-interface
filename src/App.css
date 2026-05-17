@@ -41,7 +41,8 @@ body {
   background: var(--stone-dark);
   color: var(--parchment);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: bold;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
@@ -206,10 +207,26 @@ body {
   overflow: hidden;
 }
 
+.hud-center-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 2;
+}
+
+.hud-center-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
 .hud-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
 }
 
 .hud-dragon {
@@ -233,20 +250,24 @@ body {
   color: var(--torch);
   letter-spacing: 0.12em;
   text-shadow: 0 0 12px rgb(var(--torch-rgb) / 0.7);
+  text-align: center;
 }
 
 .hud-sub {
   font-family: var(--font-ui);
-  font-size: 11px;
-  color: rgba(245, 230, 211, 0.65);
-  letter-spacing: 0.06em;
+  font-size: 14px;
+  font-weight: bold;
+  color: rgba(245, 230, 211, 0.85);
+  letter-spacing: 0.08em;
   margin-top: 2px;
+  text-align: center;
 }
 
 .hud-stats {
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: center;
 }
 
 .hud-stat {
@@ -265,8 +286,9 @@ body {
 
 .hud-stat-label {
   font-family: var(--font-ui);
-  font-size: 11px;
-  color: rgba(245, 230, 211, 0.7);
+  font-size: 13px;
+  font-weight: bold;
+  color: rgba(245, 230, 211, 0.8);
   letter-spacing: 0.08em;
 }
 
@@ -456,8 +478,9 @@ body {
 
 .dungeon-map-label {
   font-family: var(--font-ui);
-  font-size: 12px;
-  color: rgba(245, 230, 211, 0.65);
+  font-size: 14px;
+  font-weight: bold;
+  color: rgba(245, 230, 211, 0.85);
   letter-spacing: 0.06em;
   padding: 4px 2px 6px;
   flex-shrink: 0;
@@ -472,8 +495,9 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: rgba(245, 230, 211, 0.45);
+  font-size: 13px;
+  font-weight: bold;
+  color: rgba(245, 230, 211, 0.65);
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
@@ -481,12 +505,13 @@ body {
 .dungeon-kbd-hints kbd {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 1px 5px;
   background: rgb(var(--torch-rgb) / 0.1);
   border: 1px solid rgb(var(--torch-rgb) / 0.35);
   border-radius: 2px;
-  color: rgba(255, 180, 100, 0.8);
+  color: rgba(255, 180, 100, 0.9);
   letter-spacing: 0.04em;
   line-height: 1.5;
   margin-right: 1px;

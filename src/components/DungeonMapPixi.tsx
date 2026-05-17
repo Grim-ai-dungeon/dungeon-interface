@@ -597,7 +597,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     const color = meta?.colorPixi ?? ROOM_COLORS[room.id] ?? 0xaaaaaa;
     const label = meta?.label ?? ROOM_LABELS[room.id] ?? room.label.toUpperCase();
 
-    const emojiStyle = new TextStyle({ fontSize: 24, fill: 0xffffff, align: 'center' });
+    const emojiStyle = new TextStyle({ fontSize: 36, fill: 0xffffff, align: 'center' });
     const emojiText = new Text({ text: emoji, style: emojiStyle });
     emojiText.anchor.set(0.5);
     emojiText.x = cx;
@@ -605,7 +605,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     layer.addChild(emojiText);
 
     const labelStyle = new TextStyle({
-      fontSize: 9,
+      fontSize: 14,
       fill: color,
       fontFamily: '"Courier New", monospace',
       letterSpacing: 2,
@@ -627,7 +627,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       // Emoji label
       const emojiStyle = new TextStyle({
-        fontSize: 24,
+        fontSize: 36,
         fill: 0xffffff,
         align: 'center',
       });
@@ -639,7 +639,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       // Name label
       const labelStyle = new TextStyle({
-        fontSize: 9,
+        fontSize: 14,
         fill: ROOM_COLORS[room.id] ?? 0xaaaaaa,
         fontFamily: '"Courier New", monospace',
         letterSpacing: 2,
@@ -726,26 +726,12 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     // Dark ambient overlay
     lg.rect(0, 0, CANVAS_W, CANVAS_H).fill({ color: 0x000000, alpha: 0.55 });
 
-    // Cut out light areas for each room
+    // Cut out light areas for each room — only torch glows, no background glow circles
     for (const room of ROOMS) {
-      const { cx, cy } = roomCenter(room);
-      const { w, h } = roomPixelBounds(room);
       const color = ROOM_COLORS[room.id] ?? 0xff8800;
-      const pulse = 0.03 * Math.sin(t * 1.2 + ROOMS.indexOf(room) * 1.1);
-      const lightRadius = Math.min(w, h) * 0.65 + pulse * 20;
 
-      // Erase darkness in room area using blending — approximate with a semi-transparent fill
-      // In PixiJS v8 we use alpha blending; we'll draw a radial "light" in multiply/screen mode
-      // We simulate this by drawing decreasing-alpha circles
-      const steps = 5;
-      for (let i = steps; i >= 0; i--) {
-        const r = lightRadius * (i / steps + 0.2);
-        const alpha = (0.45 * (1 - i / steps)) + pulse * 0.05;
-        lg.circle(cx, cy, r).fill({ color, alpha: alpha * 0.3 });
-      }
-
-      // Torch glows at corners
-      const { px, py } = roomPixelBounds(room);
+      // Torch glows at corners only (no big glow circle behind room)
+      const { px, py, w } = roomPixelBounds(room);
       const torchPositions = [
         { x: px + 12, y: py + 12 },
         { x: px + w - 12, y: py + 12 },
@@ -755,6 +741,9 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         lg.circle(tp.x, tp.y, 22 + torchPulse * 5).fill({ color: 0xFF8800, alpha: 0.12 + torchPulse * 0.05 });
         lg.circle(tp.x, tp.y, 10).fill({ color: 0xFFCC44, alpha: 0.18 });
       }
+
+      // Suppress unused variable warning
+      void color;
     }
   }
 

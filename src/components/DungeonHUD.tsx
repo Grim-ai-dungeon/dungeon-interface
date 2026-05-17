@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import type { AgentInfo } from '../types';
-import { ThemeSwitcher } from './ThemeSwitcher';
+// ThemeSwitcher hidden per Overlord's request — keep import for future use
+// import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface Props {
   agents: AgentInfo[];
@@ -62,17 +63,19 @@ export function DungeonHUD({ agents, ocStatus, dataGeneratedAt, onScryClick }: P
 
   return (
     <header className="dungeon-hud">
-      {/* Left: Title */}
-      <div className="hud-left">
-        <span className="hud-dragon">🐉</span>
-        <div className="hud-title-block">
-          <div className="hud-title">THE OVERLORD'S DUNGEON</div>
-          <div className="hud-sub">GRIM — DUNGEON MASTER COMMAND v2</div>
-        </div>
-      </div>
+      {/* Left: spacer (title is centered) */}
+      <div className="hud-left" style={{ minWidth: 0, flex: 1 }} />
 
-      {/* Center: Stats */}
-      <div className="hud-stats">
+      {/* Center: Title + Stats */}
+      <div className="hud-center-block">
+        <div className="hud-center-title-block">
+          <span className="hud-dragon">🐉</span>
+          <div className="hud-title-block">
+            <div className="hud-title">THE OVERLORD'S DUNGEON</div>
+            <div className="hud-sub">GRIM — DUNGEON MASTER COMMAND v2</div>
+          </div>
+        </div>
+        <div className="hud-stats">
         <div className="hud-stat">
           <span className="hud-stat-val">{agents.length}</span>
           <span className="hud-stat-label">AGENTS</span>
@@ -103,9 +106,10 @@ export function DungeonHUD({ agents, ocStatus, dataGeneratedAt, onScryClick }: P
           <span className="hud-stat-val hud-uptime"><Uptime /></span>
           <span className="hud-stat-label">UPTIME</span>
         </div>
+        </div>
       </div>
 
-      {/* Right: Sync indicator + Theme picker + Scry button + Connection + Clock */}
+      {/* Right: Sync indicator + Scry button + Connection + Clock */}
       <div className="hud-right">
         {dataGeneratedAt && (
           <div className="hud-sync-badge" title={`Data synced from dungeon-state.json at ${new Date(dataGeneratedAt).toLocaleTimeString()}`}>
@@ -113,7 +117,6 @@ export function DungeonHUD({ agents, ocStatus, dataGeneratedAt, onScryClick }: P
             <span className="hud-sync-label">LIVE · {fmtSyncAge(dataGeneratedAt)}</span>
           </div>
         )}
-        <ThemeSwitcher />
         {onScryClick && (
           <button
             className="hud-scry-btn"

@@ -124,6 +124,32 @@
   box-shadow: 0 0 10px var(--rp-glow, rgba(255,153,51,0.7));
 }
 
+/* ── Power-off (close) animation ── */
+.room-panel--closing {
+  animation: rp-close 0.27s cubic-bezier(0.55, 0, 0.9, 0.5) forwards !important;
+  pointer-events: none;
+}
+
+@keyframes rp-close {
+  0%   { opacity: 1;   transform: translate(-50%,-50%) scale(1);           filter: brightness(1); }
+  15%  { opacity: 1;   transform: translate(-50%,-50%) scaleY(1.04) scaleX(1.008); filter: brightness(2.2); }
+  50%  { opacity: 0.8; transform: translate(-50%,-50%) scaleY(0.02) scaleX(1.12); filter: brightness(4) saturate(0.3); }
+  100% { opacity: 0;   transform: translate(-50%,-50%) scaleY(0) scaleX(1.2);     filter: brightness(6) saturate(0); }
+}
+
+/* After position is set (dragged), power-off still works correctly */
+.room-panel--closing[style*="transform: none"] {
+  animation: rp-close-positioned 0.27s cubic-bezier(0.55, 0, 0.9, 0.5) forwards !important;
+  transform-origin: center center;
+}
+
+@keyframes rp-close-positioned {
+  0%   { opacity: 1;   filter: brightness(1);             clip-path: inset(0 0 0 0); }
+  15%  { opacity: 1;   filter: brightness(2.2);            clip-path: inset(0 0 0 0); }
+  55%  { opacity: 0.9; filter: brightness(4) saturate(0.2); clip-path: inset(48% 0 48% 0); }
+  100% { opacity: 0;   filter: brightness(6) saturate(0);  clip-path: inset(50% 0 50% 0); }
+}
+
 /* ── Power-on animation ── */
 @keyframes rp-appear {
   0%   { opacity: 0; transform: translate(-50%,-50%) scaleY(0.04) scaleX(0.9); filter: brightness(4); }
@@ -571,6 +597,77 @@
   padding: 30px 0;
   font-style: italic;
   letter-spacing: 0.6px;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   SHARED FLAVOR EMPTY STATE (used across Chat / Activity / Tasks)
+─────────────────────────────────────────────────────────────── */
+
+.rp-flavor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 32px 20px;
+  text-align: center;
+  height: 100%;
+  min-height: 80px;
+}
+
+.rp-flavor-empty-title {
+  font-size: 9px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--rp-color, #FF9933);
+  opacity: 0.28;
+  margin-bottom: 2px;
+  /* subtle glow on hover */
+  transition: opacity 0.3s;
+}
+
+.rp-flavor-empty:hover .rp-flavor-empty-title {
+  opacity: 0.55;
+}
+
+.rp-flavor-empty-line {
+  font-size: 11px;
+  font-style: italic;
+  color: #2c3a40;
+  letter-spacing: 0.3px;
+  line-height: 1.55;
+  transition: color 0.3s;
+}
+
+.rp-flavor-empty:hover .rp-flavor-empty-line {
+  color: #3d4f5a;
+}
+
+.rp-flavor-empty-hint {
+  font-size: 9px;
+  color: #1e2a30;
+  letter-spacing: 1px;
+  margin-top: 8px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   INLINE CODE RENDERING (in chat messages)
+─────────────────────────────────────────────────────────────── */
+
+.rp-inline-code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 2px;
+  padding: 1px 5px;
+  color: #c8e8ff;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 /* Gateway disconnected banner */

@@ -1,6 +1,6 @@
 // ─── RoomPanel.tsx - Floating draggable room panel ────────────────────────────
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
 import type { GatewayMessage, TreasuryData } from '../hooks/useGateway';
 import './RoomPanel.css';
@@ -64,6 +64,36 @@ interface Task {
   done: boolean;
   priority: 'high' | 'med' | 'low';
   dueDate?: string; // ISO date string YYYY-MM-DD
+}
+
+// ─── Per-agent atmospheric empty-state flavour text ────────────────────────────
+
+const CHAT_EMPTY_FLAVOR: Record<string, { title: string; lines: string[] }> = {
+  grim:   { title: '🐉 AWAITING COMMAND', lines: ['The Dungeon Master watches.', 'Speak, and your will be done.', 'Silence fills the throne room...'] },
+  bob:    { title: '📚 ARCHIVES QUIET', lines: ['The library holds its breath.', 'No queries. The tomes rest undisturbed.', 'Ask and the archives shall answer.'] },
+  kevin:  { title: '🔧 FORGE COLD', lines: ['Awaiting schematics.', 'The workshop idles — no orders received.', 'Ready to build when you command.'] },
+  stuart: { title: '💰 TREASURY SILENT', lines: ['The coins rest in their vault.', 'No transactions pending.', 'Send instructions to the Keeper.'] },
+  agnes:  { title: '🎨 CANVAS BARE', lines: ['The studio waits for a muse.', 'No creative briefs received.', 'Agnes sharpens her brushes in silence.'] },
+};
+
+const ACTIVITY_EMPTY_FLAVOR: Record<string, { title: string; lines: string[] }> = {
+  grim:   { title: '🌑 LOG EMPTY', lines: ['No events recorded in this cycle.', 'The dungeon holds its breath.', 'All is quiet on the ley lines.'] },
+  bob:    { title: '📖 NO ENTRIES', lines: ['The quill has not yet moved.', 'Archives show nothing logged today.', 'Awaiting research directives.'] },
+  kevin:  { title: '⚙ IDLE LOG', lines: ['No builds dispatched this session.', 'The forge awaits its first order.', 'Workshop logs start when work begins.'] },
+  stuart: { title: '📊 LEDGER CLEAR', lines: ['No transactions to record.', 'The books are balanced and bare.', 'Spending begins when work does.'] },
+  agnes:  { title: '🖼 STUDIO BARE', lines: ['No creative work logged yet.', 'Agnes waits for a commission.', 'The canvas is clean and ready.'] },
+};
+
+const TASKS_EMPTY_FLAVOR: Record<string, { title: string; lines: string[] }> = {
+  grim:   { title: '📋 TASK QUEUE EMPTY', lines: ['No orders queued. The dungeon rests.', 'Dispatch a command to begin.'] },
+  bob:    { title: '📋 NO RESEARCH TASKS', lines: ['No queries in the research queue.', 'Add a task to start the hunt.'] },
+  kevin:  { title: '📋 BUILD QUEUE CLEAR', lines: ['Nothing on the forge schedule.', 'Add a task to fire the workshop.'] },
+  stuart: { title: '📋 ACCOUNTS CLEAR', lines: ['No financial tasks queued.', 'Add an audit item to begin.'] },
+  agnes:  { title: '📋 COMMISSIONS EMPTY', lines: ['No art commissions pending.', 'Add a task to start creating.'] },
+};
+
+function getFlavorBlock(map: Record<string, { title: string; lines: string[] }>, agentId: string) {
+  return map[agentId] ?? { title: '📋 EMPTY', lines: ['Nothing here yet.'] };
 }
 
 interface Props {
@@ -418,6 +448,17 @@ export function RoomPanel({
     window.addEventListener('mouseup', onUp);
   }, [onBringToFront]);
 
+  // ── Close animation state ──────────────────────────────────────────────────
+  const [isClosing, setIsClosing] = useState(false);
+  const [, startTransition] = useTransition();
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      startTransition(() => onClose());
+    }, 280);
+  }, [onClose, startTransition]);
+
   // ── Panel style ────────────────────────────────────────────────────────────
   const panelStyle: React.CSSProperties = {
     ['--rp-color' as string]: color,
@@ -444,7 +485,7 @@ export function RoomPanel({
   return (
     <div
       ref={panelRef}
-      className={`room-panel${isTopmost ? ' room-panel--topmost' : ''}`}
+      className={`room-panel${isTopmost ? ' room-panel--topmost' : ''}${isClosing ? ' room-panel--closing' : ''}`}
       style={panelStyle}
       onMouseDown={() => { if (onBringToFront) onBringToFront(); }}
     >
@@ -475,7 +516,7 @@ export function RoomPanel({
               🗑️
             </button>
           )}
-          <button className="rp-close-btn" onClick={onClose} title="Close panel">✕</button>
+          <button className="rp-close-btn" onClick={handleClose} title="Close panel">✕</button>
         </div>
       </div>
 
@@ -514,6 +555,7 @@ export function RoomPanel({
               chatInputRef={chatInputRef}
               chatEndRef={chatEndRef}
               agentName={agent.name}
+              agentId={agent.id}
               connected={gatewayConnected}
               generating={gatewayGenerating}
               onOpenConfig={onOpenGatewayConfig}
@@ -524,6 +566,7 @@ export function RoomPanel({
               entries={activityEntries}
               onVote={handleVote}
               isLive={gatewayConnected && !!gatewayMessages && gatewayMessages.length > 0}
+              agentId={agent.id}
             />
           )}
           {activeTab === 'treasury' && agent.id === 'stuart' && (
@@ -549,6 +592,7 @@ export function RoomPanel({
               onMoveDown={handleTaskMoveDown}
               onClearCompleted={handleClearCompleted}
               onKeyDown={handleTaskKey}
+              agentId={agent.id}
             />
           )}
         </div>
@@ -578,6 +622,29 @@ export function RoomPanel({
 
 // ─── ChatTab ──────────────────────────────────────────────────────────────────
 
+// ─── Inline text renderer: newlines, `code`, **bold** ──────────────────────────────────
+
+function renderMessageText(text: string): React.ReactNode[] {
+  // Split into paragraphs on double-newline, then handle single newlines and inline marks
+  const lines = text.split('\n');
+  const result: React.ReactNode[] = [];
+  lines.forEach((line, lineIdx) => {
+    if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+    // Inline: **bold** and `code`
+    const parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
+    parts.forEach((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        result.push(<strong key={`s-${lineIdx}-${i}`}>{part.slice(2, -2)}</strong>);
+      } else if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+        result.push(<code key={`c-${lineIdx}-${i}`} className="rp-inline-code">{part.slice(1, -1)}</code>);
+      } else {
+        result.push(<React.Fragment key={`t-${lineIdx}-${i}`}>{part}</React.Fragment>);
+      }
+    });
+  });
+  return result;
+}
+
 interface ChatTabProps {
   messages: ChatMessage[];
   chatInput: string;
@@ -587,15 +654,17 @@ interface ChatTabProps {
   chatInputRef: React.RefObject<HTMLInputElement>;
   chatEndRef: React.RefObject<HTMLDivElement>;
   agentName: string;
+  agentId: string;
   connected: boolean;
   generating?: boolean;
   onOpenConfig?: () => void;
 }
 
 function ChatTab({
-  messages, chatInput, setChatInput, onSend, onKeyDown, chatInputRef, chatEndRef, agentName,
+  messages, chatInput, setChatInput, onSend, onKeyDown, chatInputRef, chatEndRef, agentName, agentId,
   connected, generating, onOpenConfig,
 }: ChatTabProps) {
+  const emptyFlavor = getFlavorBlock(CHAT_EMPTY_FLAVOR, agentId);
   return (
     <div className="rp-chat">
       {/* Tab sub-header */}
@@ -619,8 +688,14 @@ function ChatTab({
       )}
       <div className="rp-chat-messages">
         {messages.length === 0 ? (
-          <div className="rp-chat-empty">
-            {connected ? 'Speak, and the agent shall respond...' : 'Connect to the gateway to start chatting.'}
+          <div className="rp-flavor-empty">
+            <div className="rp-flavor-empty-title">{emptyFlavor.title}</div>
+            {emptyFlavor.lines.map((l, i) => (
+              <div key={i} className="rp-flavor-empty-line">{l}</div>
+            ))}
+            {!connected && (
+              <div className="rp-flavor-empty-hint">— connect gateway to chat —</div>
+            )}
           </div>
         ) : (
           messages.map(msg => (
@@ -629,7 +704,7 @@ function ChatTab({
                 {msg.sender === 'user' ? 'You' : msg.sender === 'agent' ? agentName : '⚙'}
               </span>
               <span className={`rp-msg-text${msg.streaming ? ' rp-msg-text--streaming' : ''}`}>
-                {msg.text}
+                {msg.streaming ? msg.text : renderMessageText(msg.text)}
                 {msg.streaming && <span className="rp-msg-cursor">▌</span>}
               </span>
             </div>
@@ -673,9 +748,11 @@ interface ActivityTabProps {
   entries: ActivityEntryState[];
   onVote: (id: number, vote: 'approved' | 'disapproved') => void;
   isLive?: boolean;
+  agentId: string;
 }
 
-function ActivityTab({ entries, onVote, isLive }: ActivityTabProps) {
+function ActivityTab({ entries, onVote, isLive, agentId }: ActivityTabProps) {
+  const emptyFlavor = getFlavorBlock(ACTIVITY_EMPTY_FLAVOR, agentId);
   return (
     <div className="rp-activity">
       {/* Tab sub-header */}
@@ -686,7 +763,12 @@ function ActivityTab({ entries, onVote, isLive }: ActivityTabProps) {
       </div>
       <div className="rp-activity-list">
         {entries.length === 0 ? (
-          <div className="rp-activity-empty">No activity logged yet.</div>
+          <div className="rp-flavor-empty">
+            <div className="rp-flavor-empty-title">{emptyFlavor.title}</div>
+            {emptyFlavor.lines.map((l, i) => (
+              <div key={i} className="rp-flavor-empty-line">{l}</div>
+            ))}
+          </div>
         ) : (
           entries.map(entry => (
             <div
@@ -743,6 +825,7 @@ interface TasksTabProps {
   onMoveDown: (id: number) => void;
   onClearCompleted: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  agentId: string;
 }
 
 function isOverdue(dueDate?: string): boolean {
@@ -754,12 +837,13 @@ function isOverdue(dueDate?: string): boolean {
 function TasksTab({
   tasks, taskInput, setTaskInput, taskPriority, setTaskPriority,
   taskDueDate, setTaskDueDate,
-  onAdd, onToggle, onDelete, onMoveUp, onMoveDown, onClearCompleted, onKeyDown,
+  onAdd, onToggle, onDelete, onMoveUp, onMoveDown, onClearCompleted, onKeyDown, agentId,
 }: TasksTabProps) {
   const pendingTasks = tasks.filter(t => !t.done);
   const doneTasks = tasks.filter(t => t.done);
   const orderedTasks = [...pendingTasks, ...doneTasks];
   const hasDone = doneTasks.length > 0;
+  const emptyFlavor = getFlavorBlock(TASKS_EMPTY_FLAVOR, agentId);
 
   return (
     <div className="rp-tasks">
@@ -773,7 +857,13 @@ function TasksTab({
       </div>
       <div className="rp-task-list">
         {tasks.length === 0 ? (
-          <div className="rp-task-empty">No tasks assigned - add one below.</div>
+          <div className="rp-flavor-empty">
+            <div className="rp-flavor-empty-title">{emptyFlavor.title}</div>
+            {emptyFlavor.lines.map((l, i) => (
+              <div key={i} className="rp-flavor-empty-line">{l}</div>
+            ))}
+            <div className="rp-flavor-empty-hint">— use the form below —</div>
+          </div>
         ) : (
           orderedTasks.map((task, idx) => {
             const overdue = isOverdue(task.dueDate) && !task.done;

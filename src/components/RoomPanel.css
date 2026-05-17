@@ -107,6 +107,25 @@
   background: rgba(255,153,51,0.1);
 }
 
+.rp-delete-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: #664;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+.rp-delete-btn:hover {
+  color: #ff4444;
+  border-color: #ff4444;
+  background: rgba(255, 50, 50, 0.1);
+}
+
 /* ── Body: tabs on left + content on right ── */
 .rp-body {
   display: flex;

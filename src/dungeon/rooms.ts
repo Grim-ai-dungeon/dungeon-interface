@@ -24,7 +24,7 @@ export const ROOMS: Room[] = [
     gridY: 0,
     widthTiles: 4,
     heightTiles: 4,
-    floorType: 'sand',
+    floorType: 'stone',
   },
   {
     id: 'grim' as AgentId,
@@ -94,3 +94,39 @@ export function roomCenter(room: Room): { cx: number; cy: number } {
 /** Canvas size based on grid */
 export const CANVAS_W = GRID_COLS * TILE_SIZE;
 export const CANVAS_H = GRID_ROWS * TILE_SIZE;
+
+/**
+ * Calculate the next available grid position for a new 4x4 room.
+ * Strategy: scan row by row, column by column for a gap that fits.
+ */
+export function getNextRoomPosition(rooms: Room[]): { gridX: number; gridY: number } {
+  const DEFAULT_W = 4;
+  const DEFAULT_H = 4;
+
+  // Build a set of occupied cells (with 1-tile padding to avoid walls merging weirdly)
+  const occupied = new Set<string>();
+  for (const r of rooms) {
+    for (let x = r.gridX - 1; x < r.gridX + r.widthTiles + 1; x++) {
+      for (let y = r.gridY - 1; y < r.gridY + r.heightTiles + 1; y++) {
+        occupied.add(`${x},${y}`);
+      }
+    }
+  }
+
+  // Try to find a spot — scan row then col
+  for (let row = 0; row < 40; row++) {
+    for (let col = 0; col < 40; col++) {
+      let fits = true;
+      outer: for (let x = col; x < col + DEFAULT_W; x++) {
+        for (let y = row; y < row + DEFAULT_H; y++) {
+          if (occupied.has(`${x},${y}`)) { fits = false; break outer; }
+        }
+      }
+      if (fits) return { gridX: col, gridY: row };
+    }
+  }
+
+  // Fallback — place below all rooms
+  const maxY = Math.max(...rooms.map(r => r.gridY + r.heightTiles));
+  return { gridX: 0, gridY: maxY + 1 };
+}

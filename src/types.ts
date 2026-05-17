@@ -1,6 +1,10 @@
 // ─── Shared types for Dungeon Interface v2 ────────────────────────────────────
 
-export type AgentId = 'grim' | 'bob' | 'kevin' | 'stuart' | 'agnes';
+export type AgentId = string;
+
+/** The default built-in agent IDs that cannot be deleted */
+export const DEFAULT_AGENT_IDS = ['grim', 'bob', 'kevin', 'stuart', 'agnes'] as const;
+export type DefaultAgentId = typeof DEFAULT_AGENT_IDS[number];
 
 export type AgentStatus = 'active' | 'idle' | 'error';
 

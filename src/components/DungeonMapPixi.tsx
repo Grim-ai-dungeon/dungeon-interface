@@ -21,7 +21,7 @@ import {
   Text,
   TextStyle,
 } from 'pixi.js';
-import type { AgentId, AgentInfo } from '../types';
+import type { AgentId, AgentInfo, Room } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds } from '../dungeon/rooms';
 import type { PulseHandle } from './DungeonMap';
 import { TILE_SIZE } from '../dungeon/tiles';
@@ -115,16 +115,26 @@ function pickTile(variants: Rectangle[], gridX: number, gridY: number): Rectangl
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
+// Custom room metadata (populated when new agents are added)
+export interface CustomRoomMeta {
+  id: string;
+  label: string;
+  emoji: string;
+  colorPixi: number;
+}
+
 interface Props {
   agents: AgentInfo[];
   selectedId: AgentId | null;
   onRoomClick: (id: AgentId) => void;
   onRoomHover: (id: AgentId | null) => void;
   pulseHandleRef?: React.MutableRefObject<PulseHandle | null>;
+  /** Metadata for custom (dynamically-added) rooms */
+  customRoomMeta?: CustomRoomMeta[];
 }
 
 // ─── DungeonMapPixi component ─────────────────────────────────────────────────
-export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, pulseHandleRef }: Props) {
+export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, pulseHandleRef, customRoomMeta = [] }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const containerRef = useRef<Container | null>(null);
@@ -137,6 +147,13 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const spriteContainersRef = useRef<Map<string, Container>>(new Map());
   const particleSystemRef = useRef<PixiParticleSystem | null>(null);
   const pulseSysRef = useRef<PixiEventPulseSystem | null>(null);
+  // Custom room meta ref (up-to-date in render loop)
+  const customRoomMetaRef = useRef<CustomRoomMeta[]>([]);
+  // Layers refs for adding rooms dynamically
+  const roomLayerRef = useRef<Container | null>(null);
+  const glowLayerRef = useRef<Container | null>(null);
+  const labelLayerRef = useRef<Container | null>(null);
+  const spriteLayerRef = useRef<Container | null>(null);
 
   // ── Zoom/Pan state ──────────────────────────────────────────────────────────
   const zoomRef = useRef(DEFAULT_ZOOM);
@@ -156,6 +173,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const selectedIdRef = useRef(selectedId);
   useEffect(() => { agentsRef.current = agents; }, [agents]);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  useEffect(() => { customRoomMetaRef.current = customRoomMeta; }, [customRoomMeta]);
 
   // ── Canvas size tracking ────────────────────────────────────────────────────
   const canvasSizeRef = useRef({ w: 800, h: 600 });
@@ -182,6 +200,52 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       };
     }
   }, [pulseHandleRef]);
+
+  // ── Dynamic room addition — triggered when customRoomMeta changes ──────────────
+  const builtRoomsRef = useRef<Set<string>>(new Set(['bob', 'grim', 'kevin', 'agnes', 'stuart']));
+
+  useEffect(() => {
+    if (!appRef.current) return;
+    const app = appRef.current;
+
+    for (const meta of customRoomMeta) {
+      if (builtRoomsRef.current.has(meta.id)) continue;
+      builtRoomsRef.current.add(meta.id);
+
+      // Find the room definition added to ROOMS[]
+      const room = ROOMS.find(r => r.id === meta.id);
+      if (!room) continue;
+
+      // Build room graphics
+      if (roomLayerRef.current) {
+        const roomCont = new Container();
+        roomCont.label = room.id;
+        roomContainersRef.current.set(room.id, roomCont);
+        roomLayerRef.current.addChild(roomCont);
+        buildRoom(app, roomCont, room);
+      }
+
+      // Add glow graphic
+      if (glowLayerRef.current) {
+        const glow = new Graphics();
+        glowGraphicsRef.current.set(room.id, glow);
+        glowLayerRef.current.addChild(glow);
+      }
+
+      // Add label
+      if (labelLayerRef.current) {
+        drawSingleRoomLabel(labelLayerRef.current, room, meta);
+      }
+
+      // Add sprite container
+      if (spriteLayerRef.current) {
+        const sc = new Container();
+        sc.label = `sprite_${room.id}`;
+        spriteLayerRef.current.addChild(sc);
+        spriteContainersRef.current.set(room.id, sc);
+      }
+    }
+  }, [customRoomMeta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Main PixiJS initialization ──────────────────────────────────────────────
   useEffect(() => {
@@ -241,6 +305,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       // ── Sprite containers for each agent ────────────────────────────────
       const spriteLayer = new Container();
       worldContainer.addChild(spriteLayer);
+      spriteLayerRef.current = spriteLayer;
       for (const room of ROOMS) {
         const sc = new Container();
         sc.label = `sprite_${room.id}`;
@@ -362,6 +427,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     // Draw rooms
     const roomLayer = new Container();
     world.addChild(roomLayer);
+    roomLayerRef.current = roomLayer;
 
     for (const room of ROOMS) {
       const roomCont = new Container();
@@ -374,6 +440,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     // Glow overlay layer
     const glowLayer = new Container();
     world.addChild(glowLayer);
+    glowLayerRef.current = glowLayer;
 
     for (const room of ROOMS) {
       const glow = new Graphics();
@@ -384,6 +451,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     // Labels layer
     const labelLayer = new Container();
     world.addChild(labelLayer);
+    labelLayerRef.current = labelLayer;
     drawRoomLabels(labelLayer);
   }
 
@@ -521,6 +589,37 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   }
 
   // ── Draw room labels ──────────────────────────────────────────────────────
+  function drawSingleRoomLabel(layer: Container, room: Room, meta?: CustomRoomMeta) {
+    const { cx, cy } = roomCenter(room);
+    const { h } = roomPixelBounds(room);
+
+    const emoji = meta?.emoji ?? ROOM_EMOJIS[room.id] ?? '';
+    const color = meta?.colorPixi ?? ROOM_COLORS[room.id] ?? 0xaaaaaa;
+    const label = meta?.label ?? ROOM_LABELS[room.id] ?? room.label.toUpperCase();
+
+    const emojiStyle = new TextStyle({ fontSize: 24, fill: 0xffffff, align: 'center' });
+    const emojiText = new Text({ text: emoji, style: emojiStyle });
+    emojiText.anchor.set(0.5);
+    emojiText.x = cx;
+    emojiText.y = cy - 16;
+    layer.addChild(emojiText);
+
+    const labelStyle = new TextStyle({
+      fontSize: 9,
+      fill: color,
+      fontFamily: '"Courier New", monospace',
+      letterSpacing: 2,
+      fontWeight: 'bold',
+      align: 'center',
+      dropShadow: { color: 0x000000, blur: 4, distance: 0, alpha: 1 },
+    });
+    const labelText = new Text({ text: label, style: labelStyle });
+    labelText.anchor.set(0.5);
+    labelText.x = cx;
+    labelText.y = cy + h / 2 - 16;
+    layer.addChild(labelText);
+  }
+
   function drawRoomLabels(layer: Container) {
     for (const room of ROOMS) {
       const { cx, cy } = roomCenter(room);

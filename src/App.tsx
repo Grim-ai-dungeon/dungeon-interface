@@ -10,8 +10,46 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { ScreenWatcher } from './components/ScreenWatcher';
 import { LeftStatusBar } from './components/LeftStatusBar';
 import { GatewayConfig } from './components/GatewayConfig';
+import { AddAgentModal } from './components/AddAgentModal';
+import type { NewAgentData } from './components/AddAgentModal';
 import { useGateway } from './hooks/useGateway';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
+import { DEFAULT_AGENT_IDS } from './types';
+import { ROOMS, getNextRoomPosition } from './dungeon/rooms';
+import type { Room } from './types';
+
+// ─── localStorage helpers ─────────────────────────────────────────────────────
+const CUSTOM_AGENTS_KEY = 'dungeon-custom-agents';
+
+interface StoredCustomAgent {
+  id: string;
+  name: string;
+  role: string;
+  emoji: string;
+  model: string;
+  colorHex: string;
+  colorPixi: number;
+  floorType: 'stone' | 'brick' | 'gold';
+  room: { gridX: number; gridY: number; widthTiles: number; heightTiles: number };
+}
+
+function loadCustomAgents(): StoredCustomAgent[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as StoredCustomAgent[];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomAgents(agents: StoredCustomAgent[]) {
+  localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(agents));
+}
+
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `agent-${Date.now()}`;
+}
 
 // ─── Dungeon ambient events — atmospheric flavor, fired periodically ──────────
 
@@ -190,7 +228,23 @@ function nowTime(): string {
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [agents, setAgents] = useState<AgentInfo[]>(INITIAL_AGENTS);
+  const [agents, setAgents] = useState<AgentInfo[]>(() => {
+    // Merge default agents with any saved custom agents
+    const custom = loadCustomAgents();
+    const customAgentInfos: AgentInfo[] = custom.map(c => ({
+      id: c.id,
+      name: c.name,
+      role: c.role,
+      emoji: c.emoji,
+      status: 'idle' as const,
+      currentTask: 'Awaiting orders...',
+      model: c.model || undefined,
+      activityLog: [
+        { id: nextLogId(), time: nowTime(), agentId: c.id, msg: `${c.emoji} ${c.name}'s chamber is ready.`, type: 'info' },
+      ],
+    }));
+    return [...INITIAL_AGENTS, ...customAgentInfos];
+  });
   // globalLog kept for future use (will be wired to room panels)
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
   void globalLog; // referenced for future panel use
@@ -199,6 +253,21 @@ function App() {
   const [isScrying, setIsScrying] = useState(false);
   const [dataGeneratedAt, setDataGeneratedAt] = useState<number | null>(null);
   const [showGatewayConfig, setShowGatewayConfig] = useState(false);
+  const [showAddAgent, setShowAddAgent] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  // Track custom rooms in state so map can re-render
+  const [customRooms, setCustomRooms] = useState<Room[]>(() => {
+    const custom = loadCustomAgents();
+    return custom.map(c => ({
+      id: c.id,
+      label: `${c.name}'s Chamber`,
+      gridX: c.room.gridX,
+      gridY: c.room.gridY,
+      widthTiles: c.room.widthTiles,
+      heightTiles: c.room.heightTiles,
+      floorType: c.floorType,
+    }));
+  });
   const pulseHandleRef = useRef<PulseHandle | null>(null);
 
   // ── Gateway hook ────────────────────────────────────────────────────────
@@ -247,12 +316,118 @@ function App() {
     ]);
   }, []);
 
+  // ── Fetch available models when add-agent modal opens ──────────────────
+  useEffect(() => {
+    if (!showAddAgent) return;
+    const fetchModels = async () => {
+      try {
+        const res = await fetch('http://localhost:18789/api/v1/models', {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return;
+        const data = await res.json() as { models?: { id: string }[] | string[] };
+        const raw = data.models ?? [];
+        const ids = Array.isArray(raw)
+          ? raw.map(m => (typeof m === 'string' ? m : m.id)).filter(Boolean)
+          : [];
+        if (ids.length > 0) setAvailableModels(ids);
+      } catch {
+        // silent — modal will show free-text input
+      }
+    };
+    fetchModels();
+  }, [showAddAgent]);
+
+  // ── Add a new custom agent ──────────────────────────────────────────────
+  const handleAddAgent = useCallback((data: NewAgentData) => {
+    const baseId = slugify(data.name);
+    // Ensure unique id
+    const existingIds = new Set([...agents.map(a => a.id), ...ROOMS.map(r => r.id)]);
+    let agentId = baseId;
+    let counter = 2;
+    while (existingIds.has(agentId)) { agentId = `${baseId}-${counter++}`; }
+
+    // Calculate room position using ALL current rooms (static + custom)
+    const allRooms = [...ROOMS, ...customRooms];
+    const { gridX, gridY } = getNextRoomPosition(allRooms);
+    const newRoom: Room = {
+      id: agentId,
+      label: `${data.name}'s Chamber`,
+      gridX,
+      gridY,
+      widthTiles: 4,
+      heightTiles: 4,
+      floorType: data.floorType,
+    };
+
+    // Add to ROOMS array (mutable reference used by PixiJS)
+    ROOMS.push(newRoom);
+
+    // Add to custom rooms state
+    setCustomRooms(prev => [...prev, newRoom]);
+
+    // Create AgentInfo
+    const newAgent: AgentInfo = {
+      id: agentId,
+      name: data.name,
+      role: data.role,
+      emoji: data.emoji,
+      status: 'idle',
+      currentTask: 'Awaiting first orders...',
+      model: data.model || undefined,
+      activityLog: [
+        { id: nextLogId(), time: nowTime(), agentId, msg: `${data.emoji} ${data.name} has joined the dungeon!`, type: 'success' },
+      ],
+    };
+    setAgents(prev => [...prev, newAgent]);
+
+    // Persist to localStorage
+    const stored = loadCustomAgents();
+    stored.push({
+      id: agentId,
+      name: data.name,
+      role: data.role,
+      emoji: data.emoji,
+      model: data.model,
+      colorHex: data.colorHex,
+      colorPixi: data.colorPixi,
+      floorType: data.floorType,
+      room: { gridX, gridY, widthTiles: 4, heightTiles: 4 },
+    });
+    saveCustomAgents(stored);
+
+    addLog(agentId, `${data.emoji} New minion ${data.name} (${data.role}) has entered the dungeon!`, 'success');
+    setShowAddAgent(false);
+  }, [agents, customRooms, addLog]);
+
+  // ── Delete a custom agent ──────────────────────────────────────────────
+  const handleDeleteAgent = useCallback((agentId: AgentId) => {
+    // Guard: default agents cannot be deleted
+    if ((DEFAULT_AGENT_IDS as readonly string[]).includes(agentId)) return;
+
+    if (!window.confirm(`Remove this minion from the dungeon? This cannot be undone.`)) return;
+
+    // Remove from ROOMS array
+    const idx = ROOMS.findIndex(r => r.id === agentId);
+    if (idx !== -1) ROOMS.splice(idx, 1);
+
+    setCustomRooms(prev => prev.filter(r => r.id !== agentId));
+    setAgents(prev => prev.filter(a => a.id !== agentId));
+    if (selectedId === agentId) setSelectedId(null);
+
+    // Remove from localStorage
+    const stored = loadCustomAgents().filter(c => c.id !== agentId);
+    saveCustomAgents(stored);
+
+    addLog('grim', `A chamber was sealed. One fewer minion walks these halls.`, 'warn');
+  }, [selectedId, addLog]);
+
   // ── Simulation engine — rotating tasks + live activity feed ──────────────
   useEffect(() => {
     let cancelled = false;
-    const taskIndices: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0, agnes: 0 };
+    const taskIndices: Record<string, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0, agnes: 0 };
 
-    function scheduleNextTick(agentId: AgentId, delay: number) {
+    function scheduleNextTick(agentId: string, delay: number) {
       setTimeout(() => {
         if (cancelled) return;
 
@@ -289,7 +464,7 @@ function App() {
     }
 
     // Stagger initial starts so all 5 don't fire simultaneously
-    const agentIds: AgentId[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
+    const agentIds: string[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
     agentIds.forEach((id, i) => {
       scheduleNextTick(id, 1500 + i * 1300 + Math.random() * 1500);
     });
@@ -417,7 +592,7 @@ function App() {
 
   // ── Keyboard navigation: 1-4 to select rooms, Escape to close ─────────────
   useEffect(() => {
-    const roomOrder: AgentId[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
+    const roomOrder: string[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const idx = parseInt(e.key, 10) - 1;
@@ -494,7 +669,7 @@ function App() {
               <kbd>ESC</kbd>CLOSE
             </span>
           </div>
-            <div className="dungeon-map-canvas-wrap">
+            <div className="dungeon-map-canvas-wrap" style={{ position: 'relative' }}>
               <DungeonMapPixi
                 agents={agents}
                 selectedId={selectedId}
@@ -502,6 +677,15 @@ function App() {
                 onRoomHover={handleHover}
                 pulseHandleRef={pulseHandleRef}
               />
+              {/* Add Room button — HTML overlay at bottom-right of map */}
+              <button
+                className="dungeon-add-room-btn"
+                onClick={() => setShowAddAgent(true)}
+                title="Recruit a new minion"
+                aria-label="Add new agent room"
+              >
+                + RECRUIT
+              </button>
             </div>
           </div>
         </div>
@@ -519,6 +703,8 @@ function App() {
             onOpenGatewayConfig={() => setShowGatewayConfig(true)}
             treasury={treasury}
             onFetchTreasury={fetchTreasury}
+            onDeleteAgent={handleDeleteAgent}
+            isCustomAgent={!(DEFAULT_AGENT_IDS as readonly string[]).includes(selectedAgent.id)}
           />
         )}
       </div>
@@ -533,6 +719,16 @@ function App() {
 
       {/* Scrying Portal — Screen Watch overlay */}
       {isScrying && <ScreenWatcher onClose={() => setIsScrying(false)} />}
+
+      {/* Add Agent Modal */}
+      {showAddAgent && (
+        <AddAgentModal
+          onClose={() => setShowAddAgent(false)}
+          onAdd={handleAddAgent}
+          existingNames={agents.map(a => a.name)}
+          availableModels={availableModels.length > 0 ? availableModels : undefined}
+        />
+      )}
     </>
   );
 }

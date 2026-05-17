@@ -1,0 +1,266 @@
+/* AddAgentModal.css — Dark dungeon-themed modal styles */
+
+.aam-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+  animation: aam-backdrop-in 0.15s ease-out;
+}
+
+@keyframes aam-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.aam-modal {
+  --room-color: #9933cc;
+  background: #0e1218;
+  border: 1px solid var(--room-color);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 32px rgba(0, 0, 0, 0.9),
+    0 0 16px color-mix(in srgb, var(--room-color) 30%, transparent);
+  border-radius: 4px;
+  width: 440px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  animation: aam-modal-in 0.18s ease-out;
+}
+
+@keyframes aam-modal-in {
+  from { transform: scale(0.95) translateY(-8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);       opacity: 1; }
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.aam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--room-color) 40%, transparent);
+  background: color-mix(in srgb, var(--room-color) 10%, transparent);
+}
+
+.aam-title {
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  color: var(--room-color);
+  text-transform: uppercase;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--room-color) 60%, transparent);
+}
+
+.aam-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 2px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.aam-close:hover {
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────────── */
+.aam-form {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.aam-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.aam-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--room-color);
+  opacity: 0.8;
+  text-transform: uppercase;
+}
+
+.aam-input {
+  background: #080b0e;
+  border: 1px solid #2a3040;
+  border-radius: 3px;
+  color: #cdd;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.aam-input:focus {
+  border-color: color-mix(in srgb, var(--room-color) 60%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--room-color) 15%, transparent);
+}
+.aam-input::placeholder {
+  color: #3a4455;
+}
+
+.aam-input--emoji {
+  font-size: 20px;
+  text-align: center;
+  padding: 4px 8px;
+  width: 60px;
+}
+
+.aam-select {
+  background: #080b0e;
+  border: 1px solid #2a3040;
+  border-radius: 3px;
+  color: #cdd;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.aam-select:focus {
+  border-color: color-mix(in srgb, var(--room-color) 60%, transparent);
+}
+.aam-select option {
+  background: #0e1218;
+}
+
+/* ── Row layout ──────────────────────────────────────────────────────────────── */
+.aam-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.aam-field--short { flex: 0 0 70px; }
+.aam-field--grow  { flex: 1; }
+
+/* ── Floor options ────────────────────────────────────────────────────────────── */
+.aam-floor-opts {
+  display: flex;
+  gap: 8px;
+}
+
+.aam-floor-btn {
+  flex: 1;
+  background: #080b0e;
+  border: 1px solid #2a3040;
+  border-radius: 3px;
+  color: #889;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.aam-floor-btn:hover {
+  border-color: color-mix(in srgb, var(--room-color) 50%, transparent);
+  color: #bbc;
+}
+.aam-floor-btn--active {
+  border-color: var(--room-color);
+  background: color-mix(in srgb, var(--room-color) 12%, transparent);
+  color: var(--room-color);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--room-color) 20%, transparent);
+}
+
+/* ── Color swatches ──────────────────────────────────────────────────────────── */
+.aam-colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aam-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+  padding: 0;
+  outline: none;
+}
+.aam-color-swatch:hover {
+  transform: scale(1.12);
+}
+.aam-color-swatch--active {
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  transform: scale(1.08);
+}
+
+/* ── Error ────────────────────────────────────────────────────────────────────── */
+.aam-error {
+  color: #ff5555;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 6px 10px;
+  background: rgba(255, 50, 50, 0.08);
+  border: 1px solid rgba(255, 50, 50, 0.25);
+  border-radius: 3px;
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────────────── */
+.aam-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.aam-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+  padding: 8px 16px;
+  border-radius: 3px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+
+.aam-btn--cancel {
+  background: transparent;
+  border-color: #3a4455;
+  color: #667;
+}
+.aam-btn--cancel:hover {
+  border-color: #556;
+  color: #99a;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.aam-btn--create {
+  background: color-mix(in srgb, var(--room-color) 15%, transparent);
+  border-color: var(--room-color);
+  color: var(--room-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--room-color) 20%, transparent);
+}
+.aam-btn--create:hover {
+  background: color-mix(in srgb, var(--room-color) 25%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--room-color) 35%, transparent);
+}
+.aam-btn--create:active {
+  transform: scale(0.97);
+}

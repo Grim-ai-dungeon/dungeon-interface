@@ -79,6 +79,9 @@ interface Props {
   /** Treasury data (Stuart only) */
   treasury?: TreasuryData | null;
   onFetchTreasury?: () => Promise<void>;
+  /** Custom agent management */
+  onDeleteAgent?: (agentId: string) => void;
+  isCustomAgent?: boolean;
 }
 
 type TabId = 'chat' | 'activity' | 'tasks' | 'treasury';
@@ -98,6 +101,8 @@ export function RoomPanel({
   onOpenGatewayConfig,
   treasury,
   onFetchTreasury,
+  onDeleteAgent,
+  isCustomAgent = false,
 }: Props) {
   const color = AGENT_COLORS[agent.id] ?? '#FF9933';
   const glow = color + '26'; // ~15% alpha for box-shadow
@@ -390,6 +395,16 @@ export function RoomPanel({
         </div>
         <div className="rp-titlebar-right">
           <span className={`rp-status-dot ${statusDotClass}`} title={agent.status} />
+          {isCustomAgent && onDeleteAgent && (
+            <button
+              className="rp-delete-btn"
+              onClick={() => onDeleteAgent(agent.id)}
+              title="Remove this minion from the dungeon"
+              onMouseDown={e => e.stopPropagation()}
+            >
+              🗑️
+            </button>
+          )}
           <button className="rp-close-btn" onClick={onClose} title="Close panel">✕</button>
         </div>
       </div>

@@ -209,7 +209,34 @@ function App() {
     getHistory: gatewayGetHistory,
     messages: gatewayMessages,
     generatingAgents,
+    agentStatuses,
   } = useGateway();
+
+  // ── Sync agent status + currentTask from real gateway data ──────────────
+  useEffect(() => {
+    if (!gatewayConnected) return;
+    setAgents(prev => prev.map(agent => {
+      const runStatus = agentStatuses[agent.id];
+      const msgs = gatewayMessages[agent.id];
+      // Get last non-system message as currentTask text
+      const lastMsg = msgs && msgs.length > 0
+        ? [...msgs].reverse().find(m => m.role === 'user' || m.role === 'agent')
+        : null;
+      const taskText = lastMsg
+        ? (lastMsg.text.length > 60 ? lastMsg.text.slice(0, 60) + '…' : lastMsg.text)
+        : agent.currentTask;
+      // Map gateway run status to agent status
+      const agentStatus: AgentInfo['status'] =
+        runStatus === 'running' ? 'active' :
+        runStatus === 'error'   ? 'error'  :
+        agent.status; // keep simulation status if not overridden
+      return {
+        ...agent,
+        status: agentStatus,
+        currentTask: taskText ?? agent.currentTask,
+      };
+    }));
+  }, [agentStatuses, gatewayMessages, gatewayConnected]);
 
   const addLog = useCallback((agentId: AgentId, msg: string, type: ActivityEntry['type']) => {
     setGlobalLog(prev => [
@@ -448,6 +475,7 @@ function App() {
             onSelectAgent={handleRoomClick}
             gatewayStatus={gatewayStatus}
             onGatewayConfigOpen={() => setShowGatewayConfig(true)}
+            agentStatuses={agentStatuses}
           />
 
           {/* Map container */}

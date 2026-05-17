@@ -15,14 +15,18 @@ export interface GatewayMessage {
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+export type AgentRunStatus = 'idle' | 'running' | 'error';
+
 interface UseGatewayReturn {
   connected: boolean;
   status: ConnectionStatus;
   sendMessage: (agentId: string, text: string) => Promise<void>;
   getHistory: (agentId: string) => Promise<void>;
   abortGeneration: (agentId: string) => Promise<void>;
+  getAgentStatus: (agentId: string) => AgentRunStatus;
   messages: Record<string, GatewayMessage[]>;
   generatingAgents: Set<string>;
+  agentStatuses: Record<string, AgentRunStatus>;
 }
 
 // ─── Session key mapping ────────────────────────────────────────────────────────
@@ -85,6 +89,7 @@ export function useGateway(): UseGatewayReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [messages, setMessages] = useState<Record<string, GatewayMessage[]>>({});
   const [generatingAgents, setGeneratingAgents] = useState<Set<string>>(new Set());
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentRunStatus>>({});
 
   // Track partial (streaming) messages per session key
   const streamBuffers = useRef<Map<string, { id: string; text: string }>>(new Map());
@@ -168,6 +173,7 @@ export function useGateway(): UseGatewayReturn {
             next.delete(agentId);
             return next;
           });
+          setAgentStatuses(prev => ({ ...prev, [agentId]: 'idle' }));
         }
       } else if (p.message) {
         // Complete message (non-streaming)
@@ -199,6 +205,7 @@ export function useGateway(): UseGatewayReturn {
             next.delete(agentId);
             return next;
           });
+          setAgentStatuses(prev => ({ ...prev, [agentId]: 'idle' }));
         }
       }
     }
@@ -224,10 +231,20 @@ export function useGateway(): UseGatewayReturn {
         }
         return next;
       });
+
+      // Also update agentStatuses
+      const runStatus: AgentRunStatus = isGenerating ? 'running' :
+        (p.status === 'error' ? 'error' : 'idle');
+      setAgentStatuses(prev => ({ ...prev, [agentId]: runStatus }));
     }
   }, []);
 
   // ── Public actions ────────────────────────────────────────────────────────────
+
+  const getAgentStatus = useCallback((agentId: string): AgentRunStatus => {
+    if (generatingAgents.has(agentId)) return 'running';
+    return agentStatuses[agentId] ?? 'idle';
+  }, [generatingAgents, agentStatuses]);
 
   const sendMessage = useCallback(async (agentId: string, text: string): Promise<void> => {
     const sessionKey = sessionKeyFor(agentId);
@@ -245,6 +262,7 @@ export function useGateway(): UseGatewayReturn {
 
     // Mark as generating
     setGeneratingAgents(prev => new Set([...prev, agentId]));
+    setAgentStatuses(prev => ({ ...prev, [agentId]: 'running' }));
 
     try {
       await gateway.sendMessage(sessionKey, text);
@@ -266,6 +284,7 @@ export function useGateway(): UseGatewayReturn {
         next.delete(agentId);
         return next;
       });
+      setAgentStatuses(prev => ({ ...prev, [agentId]: 'error' }));
     }
   }, []);
 
@@ -301,6 +320,7 @@ export function useGateway(): UseGatewayReturn {
       next.delete(agentId);
       return next;
     });
+    setAgentStatuses(prev => ({ ...prev, [agentId]: 'idle' }));
   }, []);
 
   return {
@@ -309,8 +329,10 @@ export function useGateway(): UseGatewayReturn {
     sendMessage,
     getHistory,
     abortGeneration,
+    getAgentStatus,
     messages,
     generatingAgents,
+    agentStatuses,
   };
 }
 

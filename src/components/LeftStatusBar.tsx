@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { AgentId, AgentInfo } from '../types';
+import type { AgentRunStatus } from '../hooks/useGateway';
 import './LeftStatusBar.css';
 
 // Room accent colors mirroring the dungeon map palette
@@ -20,26 +21,41 @@ interface Props {
   /** Gateway connection status for the sidebar indicator */
   gatewayStatus?: 'disconnected' | 'connecting' | 'connected' | 'error';
   onGatewayConfigOpen?: () => void;
+  /** Real per-agent status from gateway */
+  agentStatuses?: Record<string, AgentRunStatus>;
 }
 
-function statusDotClass(status: AgentInfo['status']): string {
-  switch (status) {
+function statusDotClass(agentStatus: AgentInfo['status'], runStatus?: AgentRunStatus, gatewayConnected?: boolean): string {
+  // If gateway is connected, use real run status
+  if (gatewayConnected) {
+    if (runStatus === 'running') return 'lsb-dot lsb-dot--active';  // pulsing green
+    if (runStatus === 'error')   return 'lsb-dot lsb-dot--error';
+    return 'lsb-dot lsb-dot--connected'; // solid green, idle
+  }
+  // Fall back to local simulation status
+  switch (agentStatus) {
     case 'active': return 'lsb-dot lsb-dot--active';
     case 'error':  return 'lsb-dot lsb-dot--error';
     default:       return 'lsb-dot lsb-dot--idle';
   }
 }
 
-function statusLabel(status: AgentInfo['status']): string {
-  switch (status) {
+function statusLabel(agentStatus: AgentInfo['status'], runStatus?: AgentRunStatus, gatewayConnected?: boolean): string {
+  if (gatewayConnected) {
+    if (runStatus === 'running') return 'RUNNING';
+    if (runStatus === 'error')   return 'ERROR';
+    return 'IDLE';
+  }
+  switch (agentStatus) {
     case 'active': return 'ACTIVE';
     case 'error':  return 'ERROR';
     default:       return 'IDLE';
   }
 }
 
-export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen }: Props) {
-  const gwDot = gatewayStatus === 'connected' ? '🟢' :
+export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus, onGatewayConfigOpen, agentStatuses }: Props) {
+  const gwConnected = gatewayStatus === 'connected';
+  const gwDot = gwConnected ? '🟢' :
                 gatewayStatus === 'connecting' ? '🟡' :
                 gatewayStatus === 'error' ? '🔴' : '⚫';
 
@@ -58,37 +74,42 @@ export function LeftStatusBar({ agents, selectedId, onSelectAgent, gatewayStatus
         </button>
       </div>
       <div className="lsb-list">
-        {agents.map(agent => (
-          <button
-            key={agent.id}
-            className={`lsb-card${selectedId === agent.id ? ' lsb-card--selected' : ''}`}
-            onClick={() => onSelectAgent(agent.id)}
-            title={`${agent.name} — ${agent.currentTask ?? 'Idle'}`}
-            style={selectedId === agent.id ? {
-              '--agent-color': AGENT_COLORS[agent.id],
-              borderColor: AGENT_COLORS[agent.id],
-              boxShadow: `0 0 8px ${AGENT_COLORS[agent.id]}44, inset 0 0 12px ${AGENT_COLORS[agent.id]}10`,
-            } as React.CSSProperties : undefined}
-          >
-            <div className="lsb-card-top">
-              <span className="lsb-emoji">{agent.emoji}</span>
-              <div className="lsb-name-row">
-                <span className="lsb-name">{agent.name.toUpperCase()}</span>
-                <span className={statusDotClass(agent.status)} />
+        {agents.map(agent => {
+          const runStatus = agentStatuses?.[agent.id];
+          const dotClass = statusDotClass(agent.status, runStatus, gwConnected);
+          const label = statusLabel(agent.status, runStatus, gwConnected);
+          return (
+            <button
+              key={agent.id}
+              className={`lsb-card${selectedId === agent.id ? ' lsb-card--selected' : ''}`}
+              onClick={() => onSelectAgent(agent.id)}
+              title={`${agent.name} — ${agent.currentTask ?? 'Idle'}`}
+              style={selectedId === agent.id ? {
+                '--agent-color': AGENT_COLORS[agent.id],
+                borderColor: AGENT_COLORS[agent.id],
+                boxShadow: `0 0 8px ${AGENT_COLORS[agent.id]}44, inset 0 0 12px ${AGENT_COLORS[agent.id]}10`,
+              } as React.CSSProperties : undefined}
+            >
+              <div className="lsb-card-top">
+                <span className="lsb-emoji">{agent.emoji}</span>
+                <div className="lsb-name-row">
+                  <span className="lsb-name">{agent.name.toUpperCase()}</span>
+                  <span className={dotClass} />
+                </div>
               </div>
-            </div>
-            <div className="lsb-role">{agent.role}</div>
-            {agent.model && (
-              <div className="lsb-model">{agent.model.replace(/^.*\//,'')}</div>
-            )}
-            <div className="lsb-status-label" data-status={agent.status}>
-              {statusLabel(agent.status)}
-            </div>
-            {agent.currentTask && (
-              <div className="lsb-task">{agent.currentTask}</div>
-            )}
-          </button>
-        ))}
+              <div className="lsb-role">{agent.role}</div>
+              {agent.model && (
+                <div className="lsb-model">{agent.model.replace(/^.*\//,'')}</div>
+              )}
+              <div className="lsb-status-label" data-status={runStatus ?? agent.status}>
+                {label}
+              </div>
+              {agent.currentTask && (
+                <div className="lsb-task">{agent.currentTask}</div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

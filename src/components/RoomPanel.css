@@ -362,6 +362,20 @@
   min-height: 0;
 }
 
+.rp-activity-banner {
+  padding: 5px 12px;
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(0,255,136,0.15);
+  flex-shrink: 0;
+}
+
+.rp-activity-banner--live {
+  color: #00cc66;
+  background: rgba(0,255,136,0.05);
+}
+
 .rp-activity-list {
   flex: 1;
   overflow-y: auto;

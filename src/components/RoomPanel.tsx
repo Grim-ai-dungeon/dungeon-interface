@@ -1,6 +1,6 @@
 // ─── RoomPanel.tsx — Floating draggable room panel ────────────────────────────
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
 import type { GatewayMessage } from '../hooks/useGateway';
 import './RoomPanel.css';
@@ -197,13 +197,49 @@ export function RoomPanel({
   }, [handleChatSend, onClose]);
 
   // ── Activity state ─────────────────────────────────────────────────────────
-  const [activityEntries, setActivityEntries] = useState<ActivityEntryState[]>(() =>
+  // We maintain a local vote overlay on top of history-derived entries
+  const [activityVotes, setActivityVotes] = useState<Record<number, 'approved' | 'disapproved' | undefined>>({});
+
+  // Convert gateway messages to activity entries (live)
+  const gatewayActivityEntries: ActivityEntryState[] = useMemo(() => {
+    const msgs = gatewayMessages ?? [];
+    return msgs.map((m, idx): ActivityEntryState => {
+      // Determine type from role
+      const type: ActivityEntry['type'] =
+        m.role === 'user'   ? 'info' :
+        m.role === 'agent'  ? 'success' :
+        'error';
+      // Map streaming/tool-call markers
+      const msgType: ActivityEntry['type'] =
+        m.text.startsWith('Failed to send:') ? 'error' :
+        m.role === 'user' ? 'info' :
+        type;
+      const fakeId = -1000 - idx; // negative IDs to distinguish from local entries
+      const ts = new Date(m.timestamp);
+      const time = `${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}`;
+      const prefix =
+        m.role === 'user'  ? '▶ You: ' :
+        m.role === 'agent' ? '🤖 ' :
+        '⚙ ';
+      return {
+        id: fakeId,
+        time,
+        agentId: agent.id,
+        msg: prefix + (m.text.length > 120 ? m.text.slice(0, 120) + '…' : m.text),
+        type: msgType,
+        vote: activityVotes[fakeId],
+      };
+    }).reverse();
+  }, [gatewayMessages, agent.id, activityVotes]);
+
+  // Fall back to local activityLog entries if no gateway history
+  const [localActivityEntries, setLocalActivityEntries] = useState<ActivityEntryState[]>(() =>
     [...agent.activityLog].reverse()
   );
 
-  // Keep activity updated when agent.activityLog changes
+  // Keep local activity updated when agent.activityLog changes
   useEffect(() => {
-    setActivityEntries(prev => {
+    setLocalActivityEntries(prev => {
       const existingIds = new Set(prev.map(e => e.id));
       const newEntries = agent.activityLog
         .filter(e => !existingIds.has(e.id))
@@ -213,10 +249,23 @@ export function RoomPanel({
     });
   }, [agent.activityLog]);
 
+  // If gateway is connected and has messages, show gateway history; else local
+  const activityEntries = (gatewayConnected && gatewayMessages && gatewayMessages.length > 0)
+    ? gatewayActivityEntries
+    : localActivityEntries.map(e => ({ ...e, vote: activityVotes[e.id] ?? e.vote }));
+
+  // Load history when activity tab becomes active and gateway is connected
+  useEffect(() => {
+    if (activeTab === 'activity' && gatewayConnected && gatewayGetHistory) {
+      void gatewayGetHistory(agent.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, gatewayConnected]);
+
   const handleVote = useCallback((entryId: number, vote: 'approved' | 'disapproved') => {
-    setActivityEntries(prev => prev.map(e => {
-      if (e.id !== entryId) return e;
-      return { ...e, vote: e.vote === vote ? undefined : vote };
+    setActivityVotes(prev => ({
+      ...prev,
+      [entryId]: prev[entryId] === vote ? undefined : vote,
     }));
   }, []);
 
@@ -330,6 +379,7 @@ export function RoomPanel({
             <ActivityTab
               entries={activityEntries}
               onVote={handleVote}
+              isLive={gatewayConnected && !!gatewayMessages && gatewayMessages.length > 0}
             />
           )}
           {activeTab === 'tasks' && (
@@ -439,11 +489,17 @@ function ChatTab({
 interface ActivityTabProps {
   entries: ActivityEntryState[];
   onVote: (id: number, vote: 'approved' | 'disapproved') => void;
+  isLive?: boolean;
 }
 
-function ActivityTab({ entries, onVote }: ActivityTabProps) {
+function ActivityTab({ entries, onVote, isLive }: ActivityTabProps) {
   return (
     <div className="rp-activity">
+      {isLive && (
+        <div className="rp-activity-banner rp-activity-banner--live">
+          🟢 Live session history
+        </div>
+      )}
       <div className="rp-activity-list">
         {entries.length === 0 ? (
           <div className="rp-activity-empty">No activity logged yet.</div>

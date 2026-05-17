@@ -159,6 +159,11 @@
   animation: lsb-pulse 2s infinite;
 }
 
+.lsb-dot--connected {
+  background: #00cc66;
+  box-shadow: 0 0 3px #00cc66;
+}
+
 .lsb-dot--idle {
   background: #556677;
 }
@@ -206,8 +211,16 @@
   color: #00ff88;
 }
 
+.lsb-status-label[data-status='running'] {
+  color: #00ff88;
+}
+
 .lsb-status-label[data-status='idle'] {
   color: #445566;
+}
+
+.lsb-status-label[data-status='connected'] {
+  color: #00cc66;
 }
 
 .lsb-status-label[data-status='error'] {

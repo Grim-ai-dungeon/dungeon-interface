@@ -69,6 +69,12 @@ interface Task {
 interface Props {
   agent: AgentInfo;
   onClose: () => void;
+  onBringToFront?: () => void;
+  zIndex?: number;
+  /** Stagger offset for initial position (0-based index of open order) */
+  stackOffset?: number;
+  /** Whether this is the frontmost window */
+  isTopmost?: boolean;
   /** Gateway integration props */
   gatewaySendMessage?: (agentId: string, text: string) => Promise<void>;
   gatewayGetHistory?: (agentId: string) => Promise<void>;
@@ -93,6 +99,10 @@ let taskCounter = 2000;
 export function RoomPanel({
   agent,
   onClose,
+  onBringToFront,
+  zIndex = 500,
+  stackOffset = 0,
+  isTopmost = true,
   gatewaySendMessage,
   gatewayGetHistory,
   gatewayMessages,
@@ -114,19 +124,24 @@ export function RoomPanel({
   });
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
 
-  // Initialise position to screen center on first render
+  // Initialise position to screen center on first render (staggered by stackOffset)
   useEffect(() => {
     const el = panelRef.current;
     if (!el || position) return;
     const rect = el.getBoundingClientRect();
+    const stagger = stackOffset * 28; // shift each subsequent window 28px
     setPosition({
-      left: (window.innerWidth - rect.width) / 2,
-      top:  (window.innerHeight - rect.height) / 2,
+      left: (window.innerWidth - rect.width) / 2 + stagger,
+      top:  (window.innerHeight - rect.height) / 2 + stagger,
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTitleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    // Stop propagation so the PixiJS canvas mousedown handler doesn't also fire
+    // (which would cause the map to start panning while dragging the panel)
+    e.stopPropagation();
+    if (onBringToFront) onBringToFront();
     const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -366,6 +381,7 @@ export function RoomPanel({
   const panelStyle: React.CSSProperties = {
     ['--rp-color' as string]: color,
     ['--rp-glow' as string]: glow,
+    zIndex,
   };
 
   if (position) {
@@ -382,16 +398,24 @@ export function RoomPanel({
   return (
     <div
       ref={panelRef}
-      className="room-panel"
+      className={`room-panel${isTopmost ? ' room-panel--topmost' : ''}`}
       style={panelStyle}
+      onMouseDown={() => { if (onBringToFront) onBringToFront(); }}
     >
+      {/* ── Sci-fi corner brackets (TR and BL; TL and BR handled by ::before/::after) ── */}
+      <span className="rp-corner rp-corner--tr" aria-hidden="true" />
+      <span className="rp-corner rp-corner--bl" aria-hidden="true" />
+
       {/* ── Title bar ── */}
       <div className="rp-titlebar" onMouseDown={handleTitleMouseDown}>
         <div className="rp-titlebar-left">
           <span className="rp-emoji" style={{ filter: `drop-shadow(0 0 6px ${color})` }}>
             {agent.emoji}
           </span>
-          <span className="rp-title">{agent.name}'s {agent.role}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span className="rp-title">{agent.name}’s {agent.role}</span>
+            <span className="rp-node-id">NODE::{agent.id.toUpperCase()}</span>
+          </div>
         </div>
         <div className="rp-titlebar-right">
           <span className={`rp-status-dot ${statusDotClass}`} title={agent.status} />

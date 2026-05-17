@@ -25,7 +25,7 @@ import type { AgentId, AgentInfo } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds } from '../dungeon/rooms';
 import type { PulseHandle } from './DungeonMap';
 import { TILE_SIZE } from '../dungeon/tiles';
-import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite } from '../pixi/PixiAgentSprites';
+import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite, drawAgnesSprite } from '../pixi/PixiAgentSprites';
 import { PixiParticleSystem } from '../pixi/PixiParticles';
 import { PixiEventPulseSystem } from '../pixi/PixiEventPulse';
 
@@ -72,6 +72,7 @@ const ROOM_COLORS: Record<string, number> = {
   bob:    0x6699CC,
   kevin:  0xFF5522,
   stuart: 0xFFD700,
+  agnes:  0xFF66AA,
 };
 
 const ROOM_LABELS: Record<string, string> = {
@@ -79,6 +80,7 @@ const ROOM_LABELS: Record<string, string> = {
   bob:    "BOB'S LIBRARY",
   kevin:  "KEVIN'S WORKSHOP",
   stuart: "TREASURY",
+  agnes:  "AGNES'S STUDIO",
 };
 
 const ROOM_EMOJIS: Record<string, string> = {
@@ -86,13 +88,14 @@ const ROOM_EMOJIS: Record<string, string> = {
   bob:    '📚',
   kevin:  '🔧',
   stuart: '💰',
+  agnes:  '🎨',
 };
 
 // ─── Zoom/Pan constants ───────────────────────────────────────────────────────
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3.5;
 const DEFAULT_ZOOM = 1.0;
-const PAN_DRAG_THRESHOLD = 4;
+// PAN_DRAG_THRESHOLD removed — drag detection now uses 3px inline check
 
 // ─── Seeded random (deterministic per tile position) ─────────────────────────
 function seededRand(seed: number): number {
@@ -171,7 +174,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
           const from = roomCenter(grimRoom);
           const to = roomCenter(targetRoom);
           const ROOM_COLORS_MAP: Record<string, number> = {
-            grim: 0xFFA700, bob: 0x6699CC, kevin: 0xFF5522, stuart: 0xFFD700,
+            grim: 0xFFA700, bob: 0x6699CC, kevin: 0xFF5522, stuart: 0xFFD700, agnes: 0xFF66AA,
           };
           const color = ROOM_COLORS_MAP[agentId] ?? 0xffffff;
           pulseSys.fire(from.cx, from.cy, to.cx, to.cy, color);
@@ -452,7 +455,12 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     hitArea.rect(px, py, w, h).fill({ color: 0xffffff, alpha: 0.001 });
     hitArea.interactive = true;
     hitArea.cursor = 'pointer';
-    hitArea.on('pointerdown', () => onRoomClick(room.id as AgentId));
+    hitArea.on('pointerup', () => {
+      // Only fire room select if NOT dragging
+      if (!isDraggingRef.current) {
+        onRoomClick(room.id as AgentId);
+      }
+    });
     hitArea.on('pointerover', () => {
       hoveredIdRef.current = room.id as AgentId;
       onRoomHover(room.id as AgentId);
@@ -649,14 +657,6 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         lg.circle(tp.x, tp.y, 10).fill({ color: 0xFFCC44, alpha: 0.18 });
       }
     }
-
-    // Corridor torches — faint glows along corridors
-    for (const seg of CORRIDORS) {
-      const midX = (seg.x + (seg.direction === 'h' ? seg.length / 2 : 0)) * TILE_SIZE;
-      const midY = (seg.y + (seg.direction === 'v' ? seg.length / 2 : 0)) * TILE_SIZE;
-      const corridorPulse = 0.1 * Math.sin(t * 2.1 + midX * 0.05);
-      lg.circle(midX, midY, 20 + corridorPulse * 5).fill({ color: 0xFF8800, alpha: 0.06 });
-    }
   }
 
   // ── Update agent sprites in their room containers ────────────────────────
@@ -673,6 +673,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         case 'bob':    drawBobSprite(sc, cx, cy, timeSec, status, selected); break;
         case 'kevin':  drawKevinSprite(sc, cx, cy, timeSec, status, selected); break;
         case 'stuart': drawStuartSprite(sc, cx, cy, timeSec, status, selected); break;
+        case 'agnes':  drawAgnesSprite(sc, cx, cy, timeSec, status, selected); break;
       }
     }
   }
@@ -723,17 +724,20 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       if (!dragStartRef.current) return;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
-      totalDragRef.current = Math.sqrt(dx * dx + dy * dy);
-      if (totalDragRef.current > PAN_DRAG_THRESHOLD) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 3) {
         isDraggingRef.current = true;
+        totalDragRef.current = dist;
         targetPanXRef.current = dragStartRef.current.panX + dx;
         targetPanYRef.current = dragStartRef.current.panY + dy;
       }
     });
 
-    canvas.addEventListener('mouseup', () => {
+    // Listen on window so mouseup fires even if cursor leaves canvas
+    window.addEventListener('mouseup', () => {
       dragStartRef.current = null;
-      setTimeout(() => { isDraggingRef.current = false; }, 10);
+      isDraggingRef.current = false;
+      totalDragRef.current = 0;
     });
 
     // Double-click to reset

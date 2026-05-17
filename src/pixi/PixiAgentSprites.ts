@@ -305,6 +305,109 @@ export function drawKevinSprite(
   }
 }
 
+// ─── Agnes 🎨 ────────────────────────────────────────────────────────────────
+export function drawAgnesSprite(
+  container: Container,
+  cx: number, cy: number,
+  time: number,
+  status: string,
+  selected: boolean,
+): void {
+  let g = container.getChildByLabel('agnes_g') as Graphics | null;
+  if (!g) {
+    g = new Graphics();
+    g.label = 'agnes_g';
+    container.addChild(g);
+  }
+  g.clear();
+
+  const isActive = status === 'active';
+  const bob2 = Math.sin(time * 1.25) * 2;
+  const by = cy + bob2;
+
+  groundShadow(g, cx, cy);
+  if (selected) selectedRing(g, cx, cy, 18, time);
+
+  // Capsule body
+  g.roundRect(cx - 11, by - 20, 22, 28, 9).fill({ color: 0xf5cc00, alpha: 1 });
+  // Head
+  g.roundRect(cx - 10, by - 38, 20, 22, 8).fill({ color: 0xf5cc00, alpha: 1 });
+
+  // Pink/teal artist smock
+  g.roundRect(cx - 11, by - 10, 22, 18, 4).fill({ color: 0xff66aa, alpha: 0.85 });
+  // Smock straps
+  g.rect(cx - 6, by - 20, 4, 12).fill({ color: 0xff66aa, alpha: 0.85 });
+  g.rect(cx + 2, by - 20, 4, 12).fill({ color: 0xff66aa, alpha: 0.85 });
+
+  // Two goggle eyes
+  g.circle(cx - 5, by - 28, 5).fill({ color: 0x222222, alpha: 1 });
+  g.circle(cx - 5, by - 28, 3.5).fill({ color: 0xff99cc, alpha: 0.9 });
+  g.circle(cx - 5, by - 28, 5).stroke({ color: 0x555555, alpha: 1, width: 1 });
+
+  g.circle(cx + 5, by - 28, 5).fill({ color: 0x222222, alpha: 1 });
+  g.circle(cx + 5, by - 28, 3.5).fill({ color: 0xff99cc, alpha: 0.9 });
+  g.circle(cx + 5, by - 28, 5).stroke({ color: 0x555555, alpha: 1, width: 1 });
+  // Eye highlights
+  g.circle(cx - 6, by - 30, 1.5).fill({ color: 0xffffff, alpha: 0.7 });
+  g.circle(cx + 4, by - 30, 1.5).fill({ color: 0xffffff, alpha: 0.7 });
+
+  // Beret (angled on head)
+  g.ellipse(cx + 2, by - 40, 11, 6).fill({ color: 0xcc2255, alpha: 1 });
+  g.circle(cx + 10, by - 42, 3).fill({ color: 0xee3366, alpha: 1 }); // beret stem
+
+  // Paintbrush (held up, dripping)
+  const brushAngle = Math.sin(time * 1.8) * 0.18;
+  const bx = cx + 18;
+  const bby = by - 18;
+  // Handle
+  g.roundRect(bx - 1, bby - 14, 3, 20, 1).fill({ color: 0xaa6622, alpha: 1 });
+  // Bristles
+  g.roundRect(bx - 2, bby - 20, 5, 8, 2).fill({ color: 0xffffff, alpha: 0.9 });
+  // Paint drip (animated)
+  const drip = Math.sin(time * 2.1) * 0.5 + 0.5;
+  const colors = [0xff3366, 0x33ccff, 0xffcc00];
+  const paintColor = colors[Math.floor(time * 0.4) % colors.length];
+  g.circle(bx, bby - 22 - drip * 4, 3).fill({ color: paintColor, alpha: 0.9 });
+  void brushAngle;
+
+  // Paint palette (left hand)
+  const px2 = cx - 18;
+  const py2 = by - 8 + Math.sin(time * 1.4) * 2;
+  g.ellipse(px2, py2, 9, 7).fill({ color: 0x8B4513, alpha: 1 });
+  // Paint blobs on palette
+  const blobColors = [0xff3333, 0x33ff66, 0x3399ff, 0xffff33];
+  const blobPos = [[-5, -2], [0, -4], [4, -1], [-2, 2]] as const;
+  for (let i = 0; i < blobColors.length; i++) {
+    g.circle(px2 + blobPos[i][0], py2 + blobPos[i][1], 2).fill({ color: blobColors[i], alpha: 0.9 });
+  }
+
+  // Legs + shoes
+  g.roundRect(cx - 9, by + 8, 8, 10, 3).fill({ color: 0xf5cc00, alpha: 1 });
+  g.roundRect(cx + 1, by + 8, 8, 10, 3).fill({ color: 0xf5cc00, alpha: 1 });
+  g.ellipse(cx - 5, by + 18, 6, 3).fill({ color: 0x333333, alpha: 1 });
+  g.ellipse(cx + 5, by + 18, 6, 3).fill({ color: 0x333333, alpha: 1 });
+
+  if (isActive) activeSparks(g, cx, by - 10, time, 0xff66aa);
+  if (!isActive) sleepZzz(g, cx, by, time);
+
+  if (isActive) {
+    statusBadge(g, cx, cy, status);
+    let badgeText = container.getChildByLabel('agnes_badge') as Text | null;
+    if (!badgeText) {
+      badgeText = new Text({ text: '● ACTIVE', style: new TextStyle({ fontSize: 7, fill: 0x00ff88, fontFamily: 'monospace' }) });
+      badgeText.label = 'agnes_badge';
+      badgeText.anchor.set(0.5, 0.5);
+      container.addChild(badgeText);
+    }
+    badgeText.x = cx;
+    badgeText.y = cy - 50;
+    badgeText.visible = true;
+  } else {
+    const bt = container.getChildByLabel('agnes_badge') as Text | null;
+    if (bt) bt.visible = false;
+  }
+}
+
 // ─── Stuart 💰 ────────────────────────────────────────────────────────────────
 export function drawStuartSprite(
   container: Container,

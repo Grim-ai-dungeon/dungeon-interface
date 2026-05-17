@@ -1,6 +1,6 @@
 // ─── Shared types for Dungeon Interface v2 ────────────────────────────────────
 
-export type AgentId = 'grim' | 'bob' | 'kevin' | 'stuart';
+export type AgentId = 'grim' | 'bob' | 'kevin' | 'stuart' | 'agnes';
 
 export type AgentStatus = 'active' | 'idle' | 'error';
 

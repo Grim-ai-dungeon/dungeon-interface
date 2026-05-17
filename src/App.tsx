@@ -6,11 +6,9 @@ import { DungeonMapPixi } from './components/DungeonMapPixi';
 import type { PulseHandle } from './components/DungeonMap';
 import { SidePanel } from './components/SidePanel';
 import { DungeonHUD } from './components/DungeonHUD';
-import { AgentStatusPanel } from './components/AgentStatusPanel';
 import { LoadingOverlay } from './components/LoadingOverlay';
-import { ToastStack } from './components/ToastStack';
 import { ScreenWatcher } from './components/ScreenWatcher';
-import type { ToastItem } from './components/ToastStack';
+import { LeftStatusBar } from './components/LeftStatusBar';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 
 // ─── Dungeon ambient events — atmospheric flavor, fired periodically ──────────
@@ -33,6 +31,10 @@ const DUNGEON_AMBIENT_EVENTS: { agentId: AgentId; msg: string; type: ActivityEnt
   { agentId: 'stuart', msg: '✨ A stray gold coin rolls from the pile and vanishes...',           type: 'warn' },
   { agentId: 'stuart', msg: '🔒 The treasury locks engage unexpectedly. The vault is restless.', type: 'warn' },
   { agentId: 'stuart', msg: '👁️ Stuart eyes a suspicious ledger entry. Investigating.',          type: 'info' },
+  { agentId: 'agnes',  msg: '🎨 A splash of paint appears on the studio wall — unbidden.',       type: 'info' },
+  { agentId: 'agnes',  msg: '✏️ Agnes sketches furiously — inspiration strikes!',               type: 'warn' },
+  { agentId: 'agnes',  msg: '🖼️ A canvas turns itself to face the wall in the studio.',         type: 'info' },
+  { agentId: 'agnes',  msg: '🌈 Strange color swirls drift from beneath Agnes\'s door.',        type: 'info' },
 ];
 
 // ─── Task pools for simulation engine ────────────────────────────────────────
@@ -79,6 +81,16 @@ const AGENT_TASKS: Record<AgentId, { task: string; log: string; type: ActivityEn
     { task: 'Locking treasury vault',         log: 'Vault sealed. Triple-lock engaged. No unauthorized access.',        type: 'success' },
     { task: 'Calculating efficiency ROI',     log: 'ROI analysis: minion efficiency up 12% this operational cycle.',    type: 'success' },
     { task: 'Balancing dungeon ledger',       log: 'Weekly balance sheet filed. Surplus carried forward.',              type: 'info' },
+  ],
+  agnes: [
+    { task: 'Designing space dungeon assets', log: 'Asset pack v1 complete. 12 new sprites ready for production.',      type: 'success' },
+    { task: 'Sketching minion concepts',      log: 'Concept sketches done. 5 new minion designs approved by Grim.',    type: 'success' },
+    { task: 'Painting dungeon backdrops',     log: 'Backdrop layer 3 painted. Atmosphere: 94% dramatic.',              type: 'info' },
+    { task: 'Animating sprite frames',        log: 'Frame animation complete. 8-frame idle loop exported.',            type: 'success' },
+    { task: 'Reviewing art direction',        log: 'Art direction review done. Color palette updated to dungeon theme.', type: 'info' },
+    { task: 'Exporting asset pack',           log: 'Asset pack exported: 34 files, all optimized for web.',            type: 'success' },
+    { task: 'Refining UI icons',              log: 'Icon set refined. 16 dungeon interface icons updated.',            type: 'info' },
+    { task: 'Creating particle effects',      log: 'Particle effect pack complete. Sparks, smoke, and magic auras.',   type: 'warn' },
   ],
 };
 
@@ -137,6 +149,19 @@ const INITIAL_AGENTS: AgentInfo[] = [
       { id: 12, time: '00:49', agentId: 'stuart', msg: 'API spend tracking active. Current: $2.40.', type: 'info' },
     ],
   },
+  {
+    id: 'agnes',
+    name: 'Agnes',
+    role: 'Artist',
+    emoji: '🎨',
+    status: 'active',
+    currentTask: 'Designing space dungeon assets',
+    activityLog: [
+      { id: 13, time: '00:47', agentId: 'agnes', msg: 'Studio online. Canvas loaded and primed.', type: 'info' },
+      { id: 14, time: '00:48', agentId: 'agnes', msg: 'Art direction brief received from Grim.', type: 'success' },
+      { id: 15, time: '00:49', agentId: 'agnes', msg: 'Asset pack v1 in progress. 4/12 sprites done.', type: 'info' },
+    ],
+  },
 ];
 
 const INITIAL_LOG: ActivityEntry[] = [
@@ -153,9 +178,7 @@ const INITIAL_LOG: ActivityEntry[] = [
 ];
 
 let logIdCounter = 100;
-let toastIdCounter = 0;
 function nextLogId() { return ++logIdCounter; }
-function nextToastId() { return ++toastIdCounter; }
 function nowTime(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -166,28 +189,14 @@ function nowTime(): string {
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [agents, setAgents] = useState<AgentInfo[]>(INITIAL_AGENTS);
+  // globalLog kept for future use (will be wired to room panels)
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
+  void globalLog; // referenced for future panel use
   const [selectedId, setSelectedId] = useState<AgentId | null>(null);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isScrying, setIsScrying] = useState(false);
   const [dataGeneratedAt, setDataGeneratedAt] = useState<number | null>(null);
   const pulseHandleRef = useRef<PulseHandle | null>(null);
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  const addToast = useCallback((agentId: AgentId, message: string, type: ToastItem['type']) => {
-    const toast: ToastItem = {
-      id: nextToastId(),
-      agentId,
-      message,
-      type,
-      ttl: type === 'error' ? 7000 : type === 'warn' ? 5500 : 4000,
-    };
-    setToasts(prev => [...prev.slice(-4), toast]); // max 5 visible
-  }, []);
 
   const addLog = useCallback((agentId: AgentId, msg: string, type: ActivityEntry['type']) => {
     setGlobalLog(prev => [
@@ -199,9 +208,7 @@ function App() {
   // ── Simulation engine — rotating tasks + live activity feed ──────────────
   useEffect(() => {
     let cancelled = false;
-    const taskIndices: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0 };
-    // Only toast for 'success' entries, throttled per agent (not every single tick)
-    const lastToastTime: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0 };
+    const taskIndices: Record<AgentId, number> = { grim: 0, bob: 0, kevin: 0, stuart: 0, agnes: 0 };
 
     function scheduleNextTick(agentId: AgentId, delay: number) {
       setTimeout(() => {
@@ -234,26 +241,19 @@ function App() {
 
         addLog(agentId, entry.log, entry.type);
 
-        // Fire a toast for success/warn entries, but throttle: max 1 per agent per ~20s
-        const now = Date.now();
-        if ((entry.type === 'success' || entry.type === 'warn') && now - lastToastTime[agentId] > 20000) {
-          lastToastTime[agentId] = now;
-          addToast(agentId, entry.log, entry.type);
-        }
-
         // Organic random delay: 4–12 seconds per agent
         scheduleNextTick(agentId, 4000 + Math.random() * 8000);
       }, delay);
     }
 
-    // Stagger initial starts so all 4 don't fire simultaneously
-    const agentIds: AgentId[] = ['grim', 'bob', 'kevin', 'stuart'];
+    // Stagger initial starts so all 5 don't fire simultaneously
+    const agentIds: AgentId[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
     agentIds.forEach((id, i) => {
       scheduleNextTick(id, 1500 + i * 1300 + Math.random() * 1500);
     });
 
     return () => { cancelled = true; };
-  }, [addLog, addToast]);
+  }, [addLog]);
 
   // ── OpenClaw health check ────────────────────────────────────────────────────
   // Only /health is a real endpoint on this gateway. The old /api/v1/status
@@ -348,7 +348,6 @@ function App() {
   // ── Command send ────────────────────────────────────────────────────────────
   const handleSendCommand = useCallback((agentId: AgentId, cmd: string) => {
     addLog(agentId, `Command received: "${cmd}"`, 'warn');
-    addToast(agentId, `Command dispatched: "${cmd}"`, 'warn');
     setAgents(prev => prev.map(a => {
       if (a.id !== agentId) return a;
       const newEntry: ActivityEntry = {
@@ -367,7 +366,7 @@ function App() {
         if (pulseHandleRef.current) pulseHandleRef.current.fire(agentId, 'dispatch');
       }, 250);
     }
-  }, [addLog, addToast]);
+  }, [addLog]);
 
   // ── Close panel ─────────────────────────────────────────────────────────────
   const handleClose = useCallback(() => setSelectedId(null), []);
@@ -375,7 +374,7 @@ function App() {
 
   // ── Keyboard navigation: 1-4 to select rooms, Escape to close ─────────────
   useEffect(() => {
-    const roomOrder: AgentId[] = ['grim', 'bob', 'kevin', 'stuart'];
+    const roomOrder: AgentId[] = ['grim', 'bob', 'kevin', 'stuart', 'agnes'];
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const idx = parseInt(e.key, 10) - 1;
@@ -401,7 +400,6 @@ function App() {
         const evt = DUNGEON_AMBIENT_EVENTS[evtIdx % DUNGEON_AMBIENT_EVENTS.length];
         evtIdx = (evtIdx + 1) % DUNGEON_AMBIENT_EVENTS.length;
         addLog(evt.agentId, evt.msg, evt.type);
-        addToast(evt.agentId, evt.msg, evt.type);
         if (pulseHandleRef.current) {
           pulseHandleRef.current.fire(evt.agentId, 'dispatch');
         }
@@ -415,7 +413,7 @@ function App() {
       cancelled = true;
       clearTimeout(timerId);
     };
-  }, [addLog, addToast]); // pulseHandleRef is a stable ref — no dep needed
+  }, [addLog]); // pulseHandleRef is a stable ref — no dep needed
 
   // ── Selected agent ──────────────────────────────────────────────────────────
   const selectedAgent = selectedId ? (agents.find(a => a.id === selectedId) ?? null) : null;
@@ -427,8 +425,15 @@ function App() {
         {/* HUD */}
         <DungeonHUD agents={agents} ocStatus={ocStatus} dataGeneratedAt={dataGeneratedAt} onScryClick={() => setIsScrying(true)} />
 
-        {/* Main area: map + side panel + log */}
+        {/* Main area: left sidebar + map */}
         <div className="dungeon-body">
+          {/* Left agent status sidebar */}
+          <LeftStatusBar
+            agents={agents}
+            selectedId={selectedId}
+            onSelectAgent={handleRoomClick}
+          />
+
           {/* Map container */}
           <div className="dungeon-map-wrap">
             <div className="dungeon-map-label">
@@ -438,6 +443,7 @@ function App() {
               <kbd>2</kbd>BOB
               <kbd>3</kbd>KEVIN
               <kbd>4</kbd>TREASURY
+              <kbd>5</kbd>AGNES
               <kbd>ESC</kbd>CLOSE
             </span>
           </div>
@@ -451,15 +457,6 @@ function App() {
               />
             </div>
           </div>
-
-          {/* Agent status + activity log */}
-          <AgentStatusPanel
-            agents={agents}
-            entries={globalLog}
-            selectedId={selectedId}
-            onSelectAgent={handleRoomClick}
-            onSendCommand={handleSendCommand}
-          />
         </div>
 
         {/* Side panel overlay */}
@@ -474,9 +471,6 @@ function App() {
           <div className="dungeon-backdrop" onClick={handleClose} />
         )}
       </div>
-
-      {/* Toast notifications */}
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       {/* Scrying Portal — Screen Watch overlay */}
       {isScrying && <ScreenWatcher onClose={() => setIsScrying(false)} />}

@@ -19,6 +19,7 @@ const AGENT_COLORS: Record<AgentId, string> = {
   bob:    '#99CCFF',
   kevin:  '#FF6633',
   stuart: '#FFD700',
+  agnes:  '#FF66AA',
 };
 
 const TYPE_COLORS: Record<string, string> = {

@@ -10,16 +10,18 @@
 import type { AgentId } from '../types';
 
 // ── Agent room center pixels (must stay in sync with rooms.ts) ────────────────
-// TILE_SIZE = 48. Room centers derived from gridX/gridY + widthTiles/heightTiles.
-// grim:   gridX=7 gridY=4 5x5  → center pixel (7+2.5)*48=456, (4+2.5)*48=312
-// bob:    gridX=1 gridY=1 4x4  → center pixel (1+2)*48=144, (1+2)*48=144
-// kevin:  gridX=14 gridY=1 4x4 → center pixel (14+2)*48=768, (1+2)*48=144
-// stuart: gridX=7 gridY=10 5x3 → center pixel (7+2.5)*48=456, (10+1.5)*48=552
+// TILE_SIZE = 48. Compact layout:
+// bob:    gridX=0  gridY=0 4x4  → center pixel (0+2)*48=96,  (0+2)*48=96
+// grim:   gridX=4  gridY=0 5x5  → center pixel (4+2.5)*48=312, (0+2.5)*48=120
+// kevin:  gridX=9  gridY=0 4x4  → center pixel (9+2)*48=528, (0+2)*48=96
+// agnes:  gridX=0  gridY=4 4x4  → center pixel (0+2)*48=96,  (4+2)*48=288
+// stuart: gridX=4  gridY=5 5x3  → center pixel (4+2.5)*48=312, (5+1.5)*48=312
 const ROOM_CENTERS: Record<AgentId, { x: number; y: number }> = {
-  grim:   { x: 456, y: 312 },
-  bob:    { x: 144, y: 144 },
-  kevin:  { x: 768, y: 144 },
-  stuart: { x: 456, y: 552 },
+  grim:   { x: 312, y: 120 },
+  bob:    { x: 96,  y: 96  },
+  kevin:  { x: 528, y: 96  },
+  agnes:  { x: 96,  y: 288 },
+  stuart: { x: 312, y: 312 },
 };
 
 // ── Agent colors ──────────────────────────────────────────────────────────────
@@ -28,12 +30,11 @@ const AGENT_COLORS: Record<AgentId, string> = {
   bob:    '#99CCFF',
   kevin:  '#FF6633',
   stuart: '#FFD700',
+  agnes:  '#FF66AA',
 };
 
 // ── Corridor waypoints for dispatch beams (Grim ↔ each minion) ───────────────
-// Mirror the paths in corridorMessenger.ts but as pixel coords.
-// We derive pixel from tile coords: pixel = gridTile * 48 + 48 (center of tile).
-// (Same formula as corridorMessenger.ts tp() helper)
+// With compact layout, rooms are adjacent — beams travel direct short paths.
 function tp(gx: number, gy: number): [number, number] {
   const TILE = 48;
   return [gx * TILE + TILE, gy * TILE + TILE];
@@ -41,16 +42,20 @@ function tp(gx: number, gy: number): [number, number] {
 
 const CORRIDOR_PATHS: Record<Exclude<AgentId, 'grim'>, { toMinion: [number, number][]; toGrim: [number, number][] }> = {
   bob: {
-    toMinion: [tp(9, 6), tp(6, 6), tp(6, 4), tp(5, 4), tp(3, 4), tp(3, 3)],
-    toGrim:   [tp(3, 3), tp(3, 4), tp(5, 4), tp(6, 4), tp(6, 6), tp(9, 6)],
+    toMinion: [tp(4, 2), tp(2, 2), tp(2, 1)],
+    toGrim:   [tp(2, 1), tp(2, 2), tp(4, 2)],
   },
   kevin: {
-    toMinion: [tp(9, 6), tp(13, 6), tp(13, 4), tp(14, 4), tp(16, 4), tp(16, 3)],
-    toGrim:   [tp(16, 3), tp(16, 4), tp(14, 4), tp(13, 4), tp(13, 6), tp(9, 6)],
+    toMinion: [tp(8, 2), tp(10, 2), tp(10, 1)],
+    toGrim:   [tp(10, 1), tp(10, 2), tp(8, 2)],
+  },
+  agnes: {
+    toMinion: [tp(4, 4), tp(2, 4), tp(2, 5)],
+    toGrim:   [tp(2, 5), tp(2, 4), tp(4, 4)],
   },
   stuart: {
-    toMinion: [tp(9, 9), tp(9, 10), tp(9, 11)],
-    toGrim:   [tp(9, 11), tp(9, 10), tp(9, 9)],
+    toMinion: [tp(6, 4), tp(6, 5), tp(6, 6)],
+    toGrim:   [tp(6, 6), tp(6, 5), tp(6, 4)],
   },
 };
 

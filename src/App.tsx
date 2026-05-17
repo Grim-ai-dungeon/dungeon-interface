@@ -6,6 +6,7 @@ import { DungeonMapPixi } from './components/DungeonMapPixi';
 import type { PulseHandle } from './components/DungeonMap';
 import { RoomPanel } from './components/RoomPanel';
 import { DungeonHUD } from './components/DungeonHUD';
+import type { MinionBusyEntry } from './components/DungeonHUD';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ScreenWatcher } from './components/ScreenWatcher';
 import { LeftStatusBar } from './components/LeftStatusBar';
@@ -15,6 +16,7 @@ import type { NewAgentData } from './components/AddAgentModal';
 import { useGateway } from './hooks/useGateway';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 import { DEFAULT_AGENT_IDS } from './types';
+import { ActivityTicker } from './components/ActivityTicker';
 import { ROOMS, getNextRoomPosition } from './dungeon/rooms';
 import type { Room } from './types';
 
@@ -245,9 +247,8 @@ function App() {
     }));
     return [...INITIAL_AGENTS, ...customAgentInfos];
   });
-  // globalLog kept for future use (will be wired to room panels)
+  // globalLog: wired to ActivityTicker for bottom-of-screen live feed
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
-  void globalLog; // referenced for future panel use
   // Multi-window state: track open windows and their z-order
   const [openWindowIds, setOpenWindowIds] = useState<AgentId[]>([]);
   const [windowZOrder, setWindowZOrder] = useState<AgentId[]>([]);
@@ -674,6 +675,25 @@ function App() {
     .map(id => agents.find(a => a.id === id))
     .filter((a): a is AgentInfo => !!a);
 
+  // ── Minion busy indicator data for HUD ─────────────────────────────────────
+  const minionBusyEntries: MinionBusyEntry[] = agents.map(agent => {
+    const runStatus = agentStatuses[agent.id];
+    const isGenerating = generatingAgents.has(agent.id);
+    let busy: boolean | 'error';
+    if (runStatus === 'error') {
+      busy = 'error';
+    } else if (isGenerating || runStatus === 'running') {
+      busy = true;
+    } else if (gatewayConnected) {
+      // Gateway connected: use real status
+      busy = false;
+    } else {
+      // No gateway: fall back to simulation status
+      busy = agent.status === 'active';
+    }
+    return { id: agent.id, name: agent.name, busy };
+  });
+
   // Base z-index for room panels — well above map, below modals
   const BASE_Z = 500;
 
@@ -682,7 +702,7 @@ function App() {
       {isLoading && <LoadingOverlay onComplete={() => setIsLoading(false)} />}
       <div className={`dungeon-root${isLoading ? ' dungeon-root--hidden' : ''}`}>
         {/* HUD */}
-        <DungeonHUD />
+        <DungeonHUD minions={minionBusyEntries} />
 
         {/* Main area: left sidebar + map */}
         <div className="dungeon-body">
@@ -721,7 +741,11 @@ function App() {
           </div>
         </div>
 
-        {/* Floating room panels — one per open window, non-blocking */}
+        {/* Activity Ticker — always-visible bottom chronicle feed */}
+        <ActivityTicker entries={globalLog} />
+      </div>
+
+      {/* Floating room panels — one per open window, non-blocking */}
         {openWindowAgents.map((agent) => {
           const zIndex = BASE_Z + windowZOrder.indexOf(agent.id);
           // Stagger initial position so windows don't fully overlap
@@ -748,8 +772,6 @@ function App() {
             />
           );
         })}
-      </div>
-
       {/* Gateway Config Modal */}
       {showGatewayConfig && (
         <GatewayConfig

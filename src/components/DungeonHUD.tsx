@@ -16,7 +16,18 @@ function getBrusselsDate(): string {
   });
 }
 
-export function DungeonHUD() {
+export interface MinionBusyEntry {
+  id: string;
+  name: string;
+  /** true = busy/running, false = idle, 'error' = error */
+  busy: boolean | 'error';
+}
+
+interface Props {
+  minions?: MinionBusyEntry[];
+}
+
+export function DungeonHUD({ minions }: Props) {
   const [time, setTime] = useState(getBrusselsTime());
   const [date, setDate] = useState(getBrusselsDate());
 
@@ -33,9 +44,27 @@ export function DungeonHUD() {
       {/* Animated scan line sweeping down */}
       <div className="hud-scan" />
 
-      {/* Left: system status */}
+      {/* Left: system status + minion busy lights */}
       <div className="hud-left">
         <span className="hud-badge hud-badge--online">● SYS.ONLINE</span>
+        {minions && minions.length > 0 && (
+          <div className="hud-minion-lights">
+            {minions.map(m => (
+              <div key={m.id} className="hud-minion-entry" title={`${m.name}: ${m.busy === true ? 'BUSY' : m.busy === 'error' ? 'ERROR' : 'IDLE'}`}>
+                <span
+                  className={`hud-minion-dot ${
+                    m.busy === true
+                      ? 'hud-minion-dot--busy'
+                      : m.busy === 'error'
+                      ? 'hud-minion-dot--error'
+                      : 'hud-minion-dot--idle'
+                  }`}
+                />
+                <span className="hud-minion-name">{m.name.toUpperCase()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Center: title */}

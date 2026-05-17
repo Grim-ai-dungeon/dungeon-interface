@@ -499,6 +499,62 @@ body {
   50% { opacity: 0.65; }
 }
 
+/* ── Minion busy lights in HUD ─────────────────────────────────────────────── */
+.hud-minion-lights {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 153, 51, 0.12);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.hud-minion-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+
+.hud-minion-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hud-minion-dot--busy {
+  background: #00ff88;
+  box-shadow: 0 0 5px #00ff88;
+  animation: hud-minion-pulse 1.8s ease-in-out infinite;
+}
+
+.hud-minion-dot--idle {
+  background: #cc2222;
+  box-shadow: 0 0 3px #cc222255;
+}
+
+.hud-minion-dot--error {
+  background: #ff3333;
+  box-shadow: 0 0 5px #ff3333;
+  animation: hud-minion-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes hud-minion-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+.hud-minion-name {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  color: rgba(245, 230, 211, 0.45);
+  white-space: nowrap;
+}
+
 /* Brussels clock block */
 .hud-clock-block {
   display: flex;
@@ -1564,4 +1620,305 @@ body {
   .asp-panel { display: none; }
   .side-panel { width: 100%; }
   .hud-stats { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ACTIVITY TICKER — Bottom-of-screen dungeon chronicle feed
+══════════════════════════════════════════════════════════════ */
+
+.activity-ticker {
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+  background: rgba(7, 5, 2, 0.97);
+  border-top: 1px solid rgba(255, 153, 51, 0.22);
+}
+
+.ticker-glow-line {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 153, 51, 0.55) 15%,
+    rgba(255, 215, 0, 0.4) 50%,
+    rgba(255, 153, 51, 0.55) 85%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* ── Ticker bar row ── */
+.ticker-bar {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* ── Left label ── */
+.ticker-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 100%;
+  border-right: 1px solid rgba(255, 153, 51, 0.18);
+  flex-shrink: 0;
+  background: rgba(255, 153, 51, 0.06);
+}
+
+.ticker-label-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.ticker-label-text {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: bold;
+  letter-spacing: 0.18em;
+  color: rgba(255, 153, 51, 0.7);
+  white-space: nowrap;
+}
+
+/* ── Scroll mask — clips the running marquee ── */
+.ticker-scroll-mask {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+/* Fade edges for polished blend */
+.ticker-scroll-mask::before,
+.ticker-scroll-mask::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  z-index: 1;
+}
+.ticker-scroll-mask::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(7,5,2,0.97), transparent);
+}
+.ticker-scroll-mask::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(7,5,2,0.97), transparent);
+}
+
+/* ── Scrolling track — animates left ── */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.ticker-scroll-track {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  animation: ticker-scroll 60s linear infinite;
+  will-change: transform;
+}
+
+.ticker-scroll-track--paused {
+  animation-play-state: paused;
+}
+
+/* ── Individual ticker entry ── */
+.ticker-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.ticker-entry-time {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(245, 230, 211, 0.28);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.ticker-entry-agent {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+.ticker-entry-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.ticker-entry-msg {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  opacity: 0.88;
+}
+
+.ticker-entry-sep {
+  font-size: 7px;
+  color: rgba(255, 153, 51, 0.2);
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+/* ── Right controls ── */
+.ticker-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 100%;
+  border-left: 1px solid rgba(255, 153, 51, 0.18);
+  flex-shrink: 0;
+  background: rgba(255, 153, 51, 0.04);
+}
+
+.ticker-count {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(245, 230, 211, 0.3);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.ticker-expand-btn {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  color: rgba(255, 153, 51, 0.65);
+  background: transparent;
+  border: 1px solid rgba(255, 153, 51, 0.25);
+  border-radius: 2px;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.ticker-expand-btn:hover {
+  color: var(--torch);
+  border-color: rgba(255, 153, 51, 0.55);
+  background: rgba(255, 153, 51, 0.08);
+  box-shadow: 0 0 8px rgba(255, 153, 51, 0.2);
+}
+.ticker-expand-btn--active {
+  color: var(--gold);
+  border-color: rgba(255, 215, 0, 0.45);
+  background: rgba(255, 215, 0, 0.07);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
+}
+
+/* ══ Expanded log panel ══ */
+.ticker-expanded-panel {
+  border-top: 1px solid rgba(255, 153, 51, 0.14);
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  background: rgba(5, 4, 1, 0.98);
+  animation: ticker-panel-open 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes ticker-panel-open {
+  from { max-height: 0; opacity: 0; }
+  to   { max-height: 260px; opacity: 1; }
+}
+
+.ticker-expanded-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255, 153, 51, 0.14);
+  background: rgba(255, 153, 51, 0.05);
+  flex-shrink: 0;
+}
+
+.ticker-expanded-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  color: rgba(255, 153, 51, 0.8);
+}
+
+.ticker-expanded-count {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(245, 230, 211, 0.35);
+  letter-spacing: 0.06em;
+}
+
+.ticker-expanded-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+/* ── Log row entries in expanded panel ── */
+.ticker-log-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 12px;
+  border-bottom: 1px solid rgba(255, 153, 51, 0.04);
+  transition: background 0.12s;
+}
+.ticker-log-row:hover {
+  background: rgba(255, 153, 51, 0.05);
+}
+
+.ticker-log-row--warn    { border-left: 2px solid rgba(255, 215, 0,   0.4); }
+.ticker-log-row--error   { border-left: 2px solid rgba(204, 51,  51,  0.5); }
+.ticker-log-row--success { border-left: 2px solid rgba(68,  255, 136, 0.35); }
+.ticker-log-row--info    { border-left: 2px solid rgba(153, 204, 255, 0.2); }
+
+.ticker-log-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(245, 230, 211, 0.3);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+.ticker-log-agent {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  min-width: 72px;
+}
+
+.ticker-log-icon {
+  font-size: 9px;
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.ticker-log-msg {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.01em;
+  opacity: 0.88;
+  word-break: break-word;
 }

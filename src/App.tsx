@@ -9,6 +9,7 @@ import { DungeonHUD } from './components/DungeonHUD';
 import { AgentStatusPanel } from './components/AgentStatusPanel';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ToastStack } from './components/ToastStack';
+import { ScreenWatcher } from './components/ScreenWatcher';
 import type { ToastItem } from './components/ToastStack';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 
@@ -169,6 +170,8 @@ function App() {
   const [selectedId, setSelectedId] = useState<AgentId | null>(null);
   const [ocStatus, setOcStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [isScrying, setIsScrying] = useState(false);
+  const [dataGeneratedAt, setDataGeneratedAt] = useState<number | null>(null);
   const pulseHandleRef = useRef<PulseHandle | null>(null);
 
   const dismissToast = useCallback((id: number) => {
@@ -297,6 +300,7 @@ function App() {
           }>;
         };
 
+        setDataGeneratedAt(data.generatedAt);
         setAgents(prev => prev.map(agent => {
           const real = data.agents[agent.id];
           if (!real) return agent;
@@ -421,7 +425,7 @@ function App() {
       {isLoading && <LoadingOverlay onComplete={() => setIsLoading(false)} />}
       <div className={`dungeon-root${isLoading ? ' dungeon-root--hidden' : ''}`}>
         {/* HUD */}
-        <DungeonHUD agents={agents} ocStatus={ocStatus} />
+        <DungeonHUD agents={agents} ocStatus={ocStatus} dataGeneratedAt={dataGeneratedAt} onScryClick={() => setIsScrying(true)} />
 
         {/* Main area: map + side panel + log */}
         <div className="dungeon-body">
@@ -473,6 +477,9 @@ function App() {
 
       {/* Toast notifications */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Scrying Portal — Screen Watch overlay */}
+      {isScrying && <ScreenWatcher onClose={() => setIsScrying(false)} />}
     </>
   );
 }

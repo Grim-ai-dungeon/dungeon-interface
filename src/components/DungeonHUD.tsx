@@ -7,6 +7,7 @@ import { ThemeSwitcher } from './ThemeSwitcher';
 interface Props {
   agents: AgentInfo[];
   ocStatus: 'checking' | 'online' | 'offline';
+  dataGeneratedAt?: number | null;
   onScryClick?: () => void;
 }
 
@@ -43,7 +44,17 @@ function fmtTokens(n: number): string {
   return n > 0 ? String(n) : '—';
 }
 
-export function DungeonHUD({ agents, ocStatus, onScryClick }: Props) {
+function fmtSyncAge(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const s = Math.floor(diffMs / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+}
+
+export function DungeonHUD({ agents, ocStatus, dataGeneratedAt, onScryClick }: Props) {
   const activeCount = agents.filter(a => a.status === 'active').length;
   const errorCount = agents.filter(a => a.status === 'error').length;
   const totalTokens = agents.reduce((sum, a) => sum + (a.totalTokens ?? 0), 0);
@@ -94,8 +105,14 @@ export function DungeonHUD({ agents, ocStatus, onScryClick }: Props) {
         </div>
       </div>
 
-      {/* Right: Theme picker + Scry button + Connection + Clock */}
+      {/* Right: Sync indicator + Theme picker + Scry button + Connection + Clock */}
       <div className="hud-right">
+        {dataGeneratedAt && (
+          <div className="hud-sync-badge" title={`Data synced from dungeon-state.json at ${new Date(dataGeneratedAt).toLocaleTimeString()}`}>
+            <span className="hud-sync-dot" />
+            <span className="hud-sync-label">LIVE · {fmtSyncAge(dataGeneratedAt)}</span>
+          </div>
+        )}
         <ThemeSwitcher />
         {onScryClick && (
           <button

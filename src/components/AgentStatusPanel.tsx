@@ -129,7 +129,7 @@ function AgentRow({ agent, isSelected, onSelect, onSendCommand }: AgentRowProps)
     <div
       className={`asp-agent-row${isSelected ? ' asp-agent-row--selected' : ''}`}
       style={{
-        borderColor: isSelected ? color + '66' : 'rgba(255,153,51,0.12)',
+        borderColor: isSelected ? color + '66' : 'rgb(var(--torch-rgb) / 0.12)',
         background: isSelected ? color + '0a' : undefined,
       }}
     >
@@ -155,7 +155,7 @@ function AgentRow({ agent, isSelected, onSelect, onSendCommand }: AgentRowProps)
           />
         </div>
 
-        {/* Identity + task */}
+        {/* Identity + task + model */}
         <div className="asp-row-center">
           <div className="asp-row-name" style={{ color }}>
             {agent.name.toUpperCase()}
@@ -166,6 +166,11 @@ function AgentRow({ agent, isSelected, onSelect, onSendCommand }: AgentRowProps)
           <div className="asp-row-task" title={agent.currentTask ?? ''}>
             {agent.currentTask ?? 'Awaiting orders...'}
           </div>
+          {agent.model && (
+            <div className="asp-row-model" title={`Running on ${agent.model}`}>
+              {agent.model}
+            </div>
+          )}
         </div>
 
         {/* Buttons — stopPropagation so row click doesn't open SidePanel */}

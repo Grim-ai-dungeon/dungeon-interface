@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import type { AgentInfo } from '../types';
+import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface Props {
   agents: AgentInfo[];
   ocStatus: 'checking' | 'online' | 'offline';
+  onScryClick?: () => void;
 }
 
 function LiveClock() {
@@ -35,9 +37,16 @@ function Uptime() {
   return <>{str}</>;
 }
 
-export function DungeonHUD({ agents, ocStatus }: Props) {
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+  return n > 0 ? String(n) : '—';
+}
+
+export function DungeonHUD({ agents, ocStatus, onScryClick }: Props) {
   const activeCount = agents.filter(a => a.status === 'active').length;
   const errorCount = agents.filter(a => a.status === 'error').length;
+  const totalTokens = agents.reduce((sum, a) => sum + (a.totalTokens ?? 0), 0);
   const ocColor = ocStatus === 'online' ? '#44ff88' : ocStatus === 'offline' ? '#CC3333' : '#FF9933';
 
   return (
@@ -72,14 +81,31 @@ export function DungeonHUD({ agents, ocStatus }: Props) {
           <span className="hud-stat-label">ALERTS</span>
         </div>
         <div className="hud-stat-sep">|</div>
+        <div className="hud-stat" title={totalTokens > 0 ? `${totalTokens.toLocaleString()} total tokens across all agents` : 'No token data yet'}>
+          <span className="hud-stat-val" style={{ color: totalTokens > 0 ? '#FFD700' : '#555' }}>
+            {fmtTokens(totalTokens)}
+          </span>
+          <span className="hud-stat-label">TOKENS</span>
+        </div>
+        <div className="hud-stat-sep">|</div>
         <div className="hud-stat">
           <span className="hud-stat-val hud-uptime"><Uptime /></span>
           <span className="hud-stat-label">UPTIME</span>
         </div>
       </div>
 
-      {/* Right: Connection + Clock */}
+      {/* Right: Theme picker + Scry button + Connection + Clock */}
       <div className="hud-right">
+        <ThemeSwitcher />
+        {onScryClick && (
+          <button
+            className="hud-scry-btn"
+            onClick={onScryClick}
+            title="Open Scrying Portal — Screen Watch"
+          >
+            🔮 SCRY
+          </button>
+        )}
         <div className="hud-oc-status" style={{ borderColor: ocColor + '44' }}>
           <span className="hud-status-dot" style={{ background: ocColor, boxShadow: `0 0 6px ${ocColor}` }} />
           <span style={{ color: ocColor, fontSize: 11, letterSpacing: '0.06em', fontWeight: 'bold' }}>OPENCLAW {ocStatus.toUpperCase()}</span>

@@ -17,6 +17,8 @@ import { useGateway } from './hooks/useGateway';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 import { DEFAULT_AGENT_IDS } from './types';
 import { ActivityTicker } from './components/ActivityTicker';
+import { ToastStack } from './components/ToastStack';
+import { useNotifications } from './hooks/useNotifications';
 import { ROOMS, getNextRoomPosition } from './dungeon/rooms';
 import type { Room } from './types';
 
@@ -262,6 +264,17 @@ function App() {
   const [showGatewayConfig, setShowGatewayConfig] = useState(false);
   const [showAddAgent, setShowAddAgent] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Notification system
+  const {
+    toasts,
+    notifications,
+    unreadCount,
+    addNotification,
+    dismissToast,
+    markAllRead,
+    clearAll: clearAllNotifications,
+  } = useNotifications();
   // Track custom rooms in state so map can re-render
   const [customRooms, setCustomRooms] = useState<Room[]>(() => {
     const custom = loadCustomAgents();
@@ -322,6 +335,61 @@ function App() {
       { id: nextLogId(), time: nowTime(), agentId, msg, type },
     ]);
   }, []);
+
+  // ── Notification wiring: gateway connection status changes ─────────────
+  const prevGatewayStatus = useRef<typeof gatewayStatus>('disconnected');
+  useEffect(() => {
+    const prev = prevGatewayStatus.current;
+    prevGatewayStatus.current = gatewayStatus;
+    if (prev === gatewayStatus) return;
+
+    if (gatewayStatus === 'connected' && prev !== 'connected') {
+      addNotification('system', '🟢 Gateway connected — live dungeon data active.', 'success');
+      addLog('grim', '🟢 Gateway connection established. Dungeon online.', 'success');
+    } else if (gatewayStatus === 'disconnected' && prev === 'connected') {
+      addNotification('system', '⚫ Gateway disconnected. Falling back to simulation.', 'warn');
+      addLog('grim', '⚫ Gateway disconnected. Running in simulation mode.', 'warn');
+    } else if (gatewayStatus === 'error') {
+      addNotification('system', '🔴 Gateway error — check connection settings.', 'error');
+    }
+  }, [gatewayStatus, addNotification, addLog]);
+
+  // ── Notification wiring: agent error / recovery ────────────────────────
+  const prevAgentStatuses = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const prev = prevAgentStatuses.current;
+    for (const [id, status] of Object.entries(agentStatuses)) {
+      const wasError = prev[id] === 'error';
+      const isError  = status === 'error';
+      const wasRunning = prev[id] === 'running';
+      const isIdle     = status === 'idle';
+      const agent = agents.find(a => a.id === id);
+      const name  = agent?.name ?? id;
+      const emoji = agent?.emoji ?? '⚔';
+      if (!wasError && isError) {
+        addNotification(id, `${emoji} ${name} encountered an error! Check the chamber.`, 'error');
+      } else if (wasRunning && isIdle && gatewayConnected) {
+        // Agent just finished responding
+        addNotification(id, `${emoji} ${name} completed a response.`, 'success');
+      }
+    }
+    prevAgentStatuses.current = { ...agentStatuses };
+  }, [agentStatuses, agents, gatewayConnected, addNotification]);
+
+  // ── Notification wiring: new custom agent added ────────────────────────
+  const prevAgentCount = useRef(agents.length);
+  useEffect(() => {
+    const count = agents.length;
+    if (count > prevAgentCount.current) {
+      const newest = agents[agents.length - 1];
+      addNotification(
+        newest.id,
+        `${newest.emoji} ${newest.name} has joined the dungeon!`,
+        'success'
+      );
+    }
+    prevAgentCount.current = count;
+  }, [agents, addNotification]);
 
   // ── Fetch available models when add-agent modal opens ──────────────────
   useEffect(() => {
@@ -702,7 +770,15 @@ function App() {
       {isLoading && <LoadingOverlay onComplete={() => setIsLoading(false)} />}
       <div className={`dungeon-root${isLoading ? ' dungeon-root--hidden' : ''}`}>
         {/* HUD */}
-        <DungeonHUD minions={minionBusyEntries} />
+        <DungeonHUD
+          minions={minionBusyEntries}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          notificationsOpen={notificationsOpen}
+          onToggleNotifications={() => setNotificationsOpen(v => !v)}
+          onMarkAllRead={markAllRead}
+          onClearAllNotifications={clearAllNotifications}
+        />
 
         {/* Main area: left sidebar + map */}
         <div className="dungeon-body">
@@ -782,6 +858,9 @@ function App() {
 
       {/* Scrying Portal — Screen Watch overlay */}
       {isScrying && <ScreenWatcher onClose={() => setIsScrying(false)} />}
+
+      {/* Toast notification stack */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       {/* Add Agent Modal */}
       {showAddAgent && (

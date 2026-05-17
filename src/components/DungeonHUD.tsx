@@ -1,6 +1,8 @@
 // ─── DungeonHUD.tsx — Top bar title + clock ──────────────────────────────────
 
 import { useEffect, useState } from 'react';
+import { NotificationCenter } from './NotificationCenter';
+import type { NotificationRecord } from '../hooks/useNotifications';
 
 function getBrusselsTime(): string {
   return new Date().toLocaleTimeString('en-GB', {
@@ -25,9 +27,15 @@ export interface MinionBusyEntry {
 
 interface Props {
   minions?: MinionBusyEntry[];
+  notifications?: NotificationRecord[];
+  unreadCount?: number;
+  onToggleNotifications?: () => void;
+  notificationsOpen?: boolean;
+  onMarkAllRead?: () => void;
+  onClearAllNotifications?: () => void;
 }
 
-export function DungeonHUD({ minions }: Props) {
+export function DungeonHUD({ minions, notifications = [], unreadCount = 0, onToggleNotifications, notificationsOpen = false, onMarkAllRead, onClearAllNotifications }: Props) {
   const [time, setTime] = useState(getBrusselsTime());
   const [date, setDate] = useState(getBrusselsDate());
 
@@ -79,8 +87,18 @@ export function DungeonHUD({ minions }: Props) {
         </div>
       </div>
 
-      {/* Right: Brussels clock */}
+      {/* Right: Brussels clock + notification bell */}
       <div className="hud-right">
+        {onToggleNotifications && (
+          <NotificationCenter
+            notifications={notifications}
+            unreadCount={unreadCount}
+            isOpen={notificationsOpen}
+            onToggle={onToggleNotifications}
+            onMarkAllRead={onMarkAllRead ?? (() => {})}
+            onClearAll={onClearAllNotifications ?? (() => {})}
+          />
+        )}
         <div className="hud-clock-block">
           <span className="hud-clock-label">BRU</span>
           <span className="hud-clock-time">{time}</span>

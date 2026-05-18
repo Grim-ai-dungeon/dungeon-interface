@@ -44,7 +44,7 @@ export function LoadingOverlay({ onComplete }: Props) {
       <div className="loading-content">
         <div className="loading-dragon">🐉</div>
         <div className="loading-title">THE OVERLORD'S DUNGEON</div>
-        <div className="loading-subtitle">DUNGEON INTERFACE v2 — INITIALIZING</div>
+        <div className="loading-subtitle">GRIM COMMAND INTERFACE v3.0 ► INITIALIZING</div>
 
         <div className="loading-log">
           {lines.map((line, i) => (

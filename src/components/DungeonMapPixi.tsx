@@ -265,8 +265,8 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       await app.init({
         width: W,
         height: H,
-        background: 0x0a0d0f,
-        antialias: false,
+        background: 0x020408,
+        antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
         hello: false,
@@ -361,6 +361,27 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         // Update particles and pulses
         if (particleSystemRef.current) {
           particleSystemRef.current.update(dt);
+          // Ambient torch spark emission — tiny motes from each room's torches
+          if (Math.random() < 0.25) {
+            const roomIdx = Math.floor(Math.random() * ROOMS.length);
+            const room = ROOMS[roomIdx];
+            const { px, py, w, h } = roomPixelBounds(room);
+            const torchPositions = [
+              { x: px + 10, y: py + 10 },
+              { x: px + w - 10, y: py + 10 },
+              { x: px + 10, y: py + h - 10 },
+              { x: px + w - 10, y: py + h - 10 },
+            ];
+            const tp = torchPositions[Math.floor(Math.random() * torchPositions.length)];
+            const color = ROOM_COLORS[room.id] ?? 0xFF8800;
+            particleSystemRef.current.emit(tp.x, tp.y - 8, 1, color, {
+              vx: (Math.random() - 0.5) * 18,
+              vy: -15 - Math.random() * 25,
+              maxLife: 0.6 + Math.random() * 0.5,
+              size: 1 + Math.random() * 1.5,
+              alpha: 0.8,
+            });
+          }
           particleSystemRef.current.draw();
         }
         if (pulseSysRef.current) {
@@ -417,10 +438,20 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
   // ── Build the dungeon scene ───────────────────────────────────────────────
   function buildDungeon(app: Application, world: Container, _tileset: Texture) {
-    // Background fill — deep dungeon black
+    // Premium background — deep space void with subtle nebula gradients
     const bg = new Graphics();
-    bg.rect(0, 0, CANVAS_W, CANVAS_H).fill(0x0a0d0f);
+    bg.rect(0, 0, CANVAS_W, CANVAS_H).fill(0x020408);
     world.addChild(bg);
+
+    // Space nebula atmosphere — subtle background gradients
+    const nebula = new Graphics();
+    // Deep purple-blue nebula center
+    nebula.circle(CANVAS_W * 0.5, CANVAS_H * 0.4, CANVAS_W * 0.7).fill({ color: 0x0a0520, alpha: 0.8 });
+    // Ember glow at top
+    nebula.ellipse(CANVAS_W * 0.5, 0, CANVAS_W * 0.6, CANVAS_H * 0.3).fill({ color: 0x1a0800, alpha: 0.5 });
+    // Arcane glow at bottom-left
+    nebula.circle(-20, CANVAS_H * 0.8, CANVAS_W * 0.35).fill({ color: 0x0a0520, alpha: 0.35 });
+    world.addChild(nebula);
 
     // Draw corridors first (below rooms)
     const corridorLayer = new Container();
@@ -498,21 +529,49 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       }
     }
 
-    // Room border overlay (inner glow frame) — drawn with Graphics
+    // Premium room border system — multi-layer glow frame
     const border = new Graphics();
     border.label = 'border';
-    // Subtle room outline
+    const roomColor = ROOM_COLORS[room.id] ?? 0x888888;
+
+    // Outer glow frame (wide, subtle)
+    border
+      .rect(px - 3, py - 3, w + 6, h + 6)
+      .stroke({ color: roomColor, alpha: 0.12, width: 4 });
+    // Main border
     border
       .rect(px, py, w, h)
-      .stroke({ color: ROOM_COLORS[room.id] ?? 0x888888, alpha: 0.3, width: 2 });
+      .stroke({ color: roomColor, alpha: 0.45, width: 1.5 });
+    // Inner highlight line
+    border
+      .rect(px + 2, py + 2, w - 4, h - 4)
+      .stroke({ color: 0xffffff, alpha: 0.04, width: 1 });
+
+    // Corner accent brackets (sci-fi style)
+    const bracketLen = Math.min(14, w * 0.12);
+    const bracketWidth = 2;
+    const alpha = 0.85;
+    // Top-left
+    border.rect(px - 1, py - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
+    border.rect(px - 1, py - 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
+    // Top-right
+    border.rect(px + w - bracketLen + 1, py - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
+    border.rect(px + w - 1, py - 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
+    // Bottom-left
+    border.rect(px - 1, py + h - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
+    border.rect(px - 1, py + h - bracketLen + 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
+    // Bottom-right
+    border.rect(px + w - bracketLen + 1, py + h - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
+    border.rect(px + w - 1, py + h - bracketLen + 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
+
     container.addChild(border);
 
-    // Torch positions — four corners
+    // Enhanced torch positions — four corners + mid-wall accent
     const torchPositions = [
-      { x: px + 12, y: py + 12 },
-      { x: px + w - 12, y: py + 12 },
-      { x: px + 12, y: py + h - 12 },
-      { x: px + w - 12, y: py + h - 12 },
+      { x: px + 10, y: py + 10 },
+      { x: px + w - 10, y: py + 10 },
+      { x: px + 10, y: py + h - 10 },
+      { x: px + w - 10, y: py + h - 10 },
     ];
 
     for (const tp of torchPositions) {
@@ -574,24 +633,33 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     }
   }
 
-  // ── Draw a torch sprite ───────────────────────────────────────────────────
+  // ── Draw a premium torch sprite ───────────────────────────────────────────
   function drawTorch(container: Container, x: number, y: number, color: number) {
+    // Outer ambient glow (large, very soft)
+    const outerGlow = new Graphics();
+    outerGlow.circle(x, y, 28).fill({ color, alpha: 0.05 });
+    outerGlow.circle(x, y, 18).fill({ color, alpha: 0.08 });
+    container.addChild(outerGlow);
+
     const g = new Graphics();
-    // Torch base
-    g.circle(x, y, 4).fill({ color: 0x443322, alpha: 1 });
-    // Flame
-    g.circle(x, y - 2, 3).fill({ color, alpha: 0.9 });
-    g.circle(x, y - 4, 2).fill({ color: 0xffff99, alpha: 0.8 });
+    // Wall mount bracket
+    g.rect(x - 2, y + 1, 4, 3).fill({ color: 0x332211, alpha: 0.9 });
+    // Torch body
+    g.rect(x - 1.5, y - 5, 3, 7).fill({ color: 0x6B4423, alpha: 1 });
+    // Flame layers
+    g.circle(x, y - 5, 4).fill({ color, alpha: 0.85 });
+    g.circle(x, y - 7, 3).fill({ color: 0xFFCC44, alpha: 0.9 });
+    g.circle(x, y - 9, 2).fill({ color: 0xFFFF99, alpha: 0.95 });
     container.addChild(g);
 
-    // Light halo
+    // Light halo (animated in updateLighting)
     const halo = new Graphics();
-    halo.circle(x, y, 18).fill({ color, alpha: 0.0 });
+    halo.circle(x, y, 20).fill({ color, alpha: 0.0 });
     halo.label = `torch_halo_${x}_${y}`;
     container.addChild(halo);
   }
 
-  // ── Draw room labels ──────────────────────────────────────────────────────
+  // ── Draw a single room label — premium typography ────────────────────────
   function drawSingleRoomLabel(layer: Container, room: Room, meta?: CustomRoomMeta) {
     const { cx, cy } = roomCenter(room);
     const { h } = roomPixelBounds(room);
@@ -600,7 +668,13 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     const color = meta?.colorPixi ?? ROOM_COLORS[room.id] ?? 0xaaaaaa;
     const label = meta?.label ?? ROOM_LABELS[room.id] ?? room.label.toUpperCase();
 
-    const emojiStyle = new TextStyle({ fontSize: 36, fill: 0xffffff, align: 'center' });
+    // Emoji with drop-shadow glow
+    const emojiStyle = new TextStyle({
+      fontSize: 38,
+      fill: 0xffffff,
+      align: 'center',
+      dropShadow: { color: 0x000000, blur: 8, distance: 0, alpha: 0.8 },
+    });
     const emojiText = new Text({ text: emoji, style: emojiStyle });
     emojiText.anchor.set(0.5);
     emojiText.x = cx;
@@ -608,18 +682,18 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     layer.addChild(emojiText);
 
     const labelStyle = new TextStyle({
-      fontSize: 14,
+      fontSize: 12,
       fill: color,
-      fontFamily: '"Courier New", monospace',
-      letterSpacing: 2,
+      fontFamily: '"Orbitron", "Share Tech Mono", "Courier New", monospace',
+      letterSpacing: 3,
       fontWeight: 'bold',
       align: 'center',
-      dropShadow: { color: 0x000000, blur: 4, distance: 0, alpha: 1 },
+      dropShadow: { color: 0x000000, blur: 6, distance: 0, alpha: 1 },
     });
     const labelText = new Text({ text: label, style: labelStyle });
     labelText.anchor.set(0.5);
     labelText.x = cx;
-    labelText.y = cy + h / 2 - 16;
+    labelText.y = cy + h / 2 - 14;
     layer.addChild(labelText);
   }
 
@@ -628,11 +702,11 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const { cx, cy } = roomCenter(room);
       const { h } = roomPixelBounds(room);
 
-      // Emoji label
       const emojiStyle = new TextStyle({
-        fontSize: 36,
+        fontSize: 38,
         fill: 0xffffff,
         align: 'center',
+        dropShadow: { color: 0x000000, blur: 8, distance: 0, alpha: 0.8 },
       });
       const emojiText = new Text({ text: ROOM_EMOJIS[room.id] ?? '', style: emojiStyle });
       emojiText.anchor.set(0.5);
@@ -640,30 +714,24 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       emojiText.y = cy - 16;
       layer.addChild(emojiText);
 
-      // Name label
       const labelStyle = new TextStyle({
-        fontSize: 14,
+        fontSize: 12,
         fill: ROOM_COLORS[room.id] ?? 0xaaaaaa,
-        fontFamily: '"Courier New", monospace',
-        letterSpacing: 2,
+        fontFamily: '"Orbitron", "Share Tech Mono", "Courier New", monospace',
+        letterSpacing: 3,
         fontWeight: 'bold',
         align: 'center',
-        dropShadow: {
-          color: 0x000000,
-          blur: 4,
-          distance: 0,
-          alpha: 1,
-        },
+        dropShadow: { color: 0x000000, blur: 6, distance: 0, alpha: 1 },
       });
       const labelText = new Text({ text: ROOM_LABELS[room.id] ?? room.label.toUpperCase(), style: labelStyle });
       labelText.anchor.set(0.5);
       labelText.x = cx;
-      labelText.y = cy + h / 2 - 16;
+      labelText.y = cy + h / 2 - 14;
       layer.addChild(labelText);
     }
   }
 
-  // ── Update glow/selection effects ────────────────────────────────────────
+  // ── Update glow/selection effects — premium multi-layer ─────────────────
   function updateGlowEffects(time: number) {
     const t = time / 1000;
 
@@ -675,50 +743,103 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const isSelected = selectedIdRef.current === room.id;
       const isHovered = hoveredIdRef.current === room.id;
       const color = ROOM_COLORS[room.id] ?? 0x888888;
+      const roomIdx = ROOMS.indexOf(room);
 
       glow.clear();
 
+      // Passive ambient glow — every room breathes slightly
+      const breathe = 0.05 + 0.03 * Math.sin(t * 0.8 + roomIdx * 1.2);
+      glow
+        .rect(px - 8, py - 8, w + 16, h + 16)
+        .stroke({ color, alpha: breathe, width: 6 });
+
       if (isSelected) {
-        // Pulsing selection glow
-        const pulse = 0.4 + 0.3 * Math.sin(t * 2.5);
-        // Outer glow
+        // Multi-layer pulsing selection glow
+        const pulse = 0.45 + 0.35 * Math.sin(t * 2.8);
+        const pulse2 = 0.3 + 0.2 * Math.sin(t * 2.8 + 0.5);
+
+        // Outermost soft halo
         glow
-          .rect(px - 4, py - 4, w + 8, h + 8)
-          .stroke({ color, alpha: pulse * 0.8, width: 3 });
-        // Inner glow
+          .rect(px - 10, py - 10, w + 20, h + 20)
+          .stroke({ color, alpha: pulse * 0.25, width: 8 });
+        // Outer glow border
+        glow
+          .rect(px - 5, py - 5, w + 10, h + 10)
+          .stroke({ color, alpha: pulse * 0.6, width: 3 });
+        // Main selection border
         glow
           .rect(px - 1, py - 1, w + 2, h + 2)
-          .stroke({ color, alpha: 0.9, width: 2 });
-        // Corner marks
-        const corners = [
-          [px - 4, py - 4], [px + w - 8, py - 4],
-          [px - 4, py + h - 8], [px + w - 8, py + h - 8],
-        ] as const;
-        for (const [cx2, cy2] of corners) {
-          glow.rect(cx2, cy2, 12, 2).fill({ color, alpha: 0.9 });
-          glow.rect(cx2, cy2, 2, 12).fill({ color, alpha: 0.9 });
-        }
-      } else if (isHovered) {
-        const pulse = 0.2 + 0.15 * Math.sin(t * 3);
+          .stroke({ color, alpha: 0.95, width: 2 });
+        // Inner shimmer
         glow
-          .rect(px - 2, py - 2, w + 4, h + 4)
-          .stroke({ color, alpha: pulse + 0.3, width: 2 });
+          .rect(px + 3, py + 3, w - 6, h - 6)
+          .stroke({ color, alpha: pulse2 * 0.4, width: 1 });
+
+        // Animated corner brackets — extend/contract
+        const bLen = 16 + 4 * Math.sin(t * 2.8);
+        const bW = 2.5;
+        const bAlpha = 0.95;
+        // Top-left
+        glow.rect(px - 3, py - 3, bLen, bW).fill({ color, alpha: bAlpha });
+        glow.rect(px - 3, py - 3, bW, bLen).fill({ color, alpha: bAlpha });
+        // Top-right
+        glow.rect(px + w - bLen + 3, py - 3, bLen, bW).fill({ color, alpha: bAlpha });
+        glow.rect(px + w + 1, py - 3, bW, bLen).fill({ color, alpha: bAlpha });
+        // Bottom-left
+        glow.rect(px - 3, py + h + 1, bLen, bW).fill({ color, alpha: bAlpha });
+        glow.rect(px - 3, py + h - bLen + 3, bW, bLen).fill({ color, alpha: bAlpha });
+        // Bottom-right
+        glow.rect(px + w - bLen + 3, py + h + 1, bLen, bW).fill({ color, alpha: bAlpha });
+        glow.rect(px + w + 1, py + h - bLen + 3, bW, bLen).fill({ color, alpha: bAlpha });
+
+        // Center cross-hair scanline
+        const { cx: rcx, cy: rcy } = roomCenter(room);
+        const scanAlpha = 0.06 + 0.04 * Math.sin(t * 3.5);
+        glow.rect(px, rcy - 0.5, w, 1).fill({ color, alpha: scanAlpha });
+        glow.rect(rcx - 0.5, py, 1, h).fill({ color, alpha: scanAlpha });
+
+      } else if (isHovered) {
+        const pulse = 0.3 + 0.2 * Math.sin(t * 3.2);
+        glow
+          .rect(px - 5, py - 5, w + 10, h + 10)
+          .stroke({ color, alpha: pulse * 0.55, width: 4 });
+        glow
+          .rect(px - 1, py - 1, w + 2, h + 2)
+          .stroke({ color, alpha: 0.65, width: 1.5 });
+        // Hover corner accents
+        const hLen = 12;
+        const hAlpha = 0.7;
+        glow.rect(px - 2, py - 2, hLen, 2).fill({ color, alpha: hAlpha });
+        glow.rect(px - 2, py - 2, 2, hLen).fill({ color, alpha: hAlpha });
+        glow.rect(px + w - hLen + 2, py - 2, hLen, 2).fill({ color, alpha: hAlpha });
+        glow.rect(px + w, py - 2, 2, hLen).fill({ color, alpha: hAlpha });
+        glow.rect(px - 2, py + h, hLen, 2).fill({ color, alpha: hAlpha });
+        glow.rect(px - 2, py + h - hLen + 2, 2, hLen).fill({ color, alpha: hAlpha });
+        glow.rect(px + w - hLen + 2, py + h, hLen, 2).fill({ color, alpha: hAlpha });
+        glow.rect(px + w, py + h - hLen + 2, 2, hLen).fill({ color, alpha: hAlpha });
       }
 
-      // Agent status indicator
+      // Agent status indicator — premium status dot
       const agent = agentsRef.current.find(a => a.id === room.id);
       if (agent?.status === 'active') {
-        const statusPulse = 0.6 + 0.4 * Math.sin(t * 1.5 + ROOMS.indexOf(room) * 0.8);
-        // Small status dot at top-right
-        glow.circle(px + w - 8, py + 8, 4).fill({ color: 0x00ff88, alpha: statusPulse });
+        const statusPulse = 0.7 + 0.3 * Math.sin(t * 2.2 + roomIdx * 0.7);
+        // Outer glow ring
+        glow.circle(px + w - 8, py + 8, 7).fill({ color: 0x00ff88, alpha: 0.15 });
+        // Status dot
+        glow.circle(px + w - 8, py + 8, 4.5).fill({ color: 0x00ff88, alpha: statusPulse });
+        glow.circle(px + w - 8, py + 8, 2.5).fill({ color: 0xaaffcc, alpha: statusPulse });
       } else if (agent?.status === 'error') {
-        const errorPulse = 0.7 + 0.3 * Math.sin(t * 4);
-        glow.circle(px + w - 8, py + 8, 4).fill({ color: 0xff3333, alpha: errorPulse });
+        const errorPulse = 0.8 + 0.2 * Math.sin(t * 5);
+        glow.circle(px + w - 8, py + 8, 7).fill({ color: 0xff3333, alpha: 0.2 });
+        glow.circle(px + w - 8, py + 8, 4.5).fill({ color: 0xff3333, alpha: errorPulse });
+      } else {
+        // Idle dot — very dim
+        glow.circle(px + w - 8, py + 8, 3).fill({ color: 0x334455, alpha: 0.6 });
       }
     }
   }
 
-  // ── Update dynamic lighting ───────────────────────────────────────────────
+  // ── Update dynamic lighting — premium atmospheric fog + torch system ────
   function updateLighting(time: number) {
     const lg = lightingLayerRef.current;
     if (!lg) return;
@@ -726,28 +847,65 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     const t = time / 1000;
     lg.clear();
 
-    // Dark ambient overlay
-    lg.rect(0, 0, CANVAS_W, CANVAS_H).fill({ color: 0x000000, alpha: 0.55 });
+    // ── Atmospheric base fog — 3-layer deep space dungeon darkness ──────
+    // Layer 1: very deep void baseline
+    lg.rect(0, 0, CANVAS_W, CANVAS_H).fill({ color: 0x000000, alpha: 0.62 });
 
-    // Cut out light areas for each room — only torch glows, no background glow circles
+    // Layer 2: Room area light pools — SUBTRACTED from darkness
+    // Each room gets a soft ambient light pool centered on it
     for (const room of ROOMS) {
       const color = ROOM_COLORS[room.id] ?? 0xff8800;
+      const { cx, cy, } = roomCenter(room);
+      const { w, h } = roomPixelBounds(room);
+      const roomBreath = 0.04 + 0.025 * Math.sin(t * 0.6 + ROOMS.indexOf(room) * 0.9);
 
-      // Torch glows at corners only (no big glow circle behind room)
-      const { px, py, w } = roomPixelBounds(room);
-      const torchPositions = [
-        { x: px + 12, y: py + 12 },
-        { x: px + w - 12, y: py + 12 },
-      ];
-      for (const tp of torchPositions) {
-        const torchPulse = 0.2 * Math.sin(t * 5.3 + tp.x * 0.1);
-        lg.circle(tp.x, tp.y, 22 + torchPulse * 5).fill({ color: 0xFF8800, alpha: 0.12 + torchPulse * 0.05 });
-        lg.circle(tp.x, tp.y, 10).fill({ color: 0xFFCC44, alpha: 0.18 });
-      }
+      // Soft room ambient pool
+      lg.ellipse(cx, cy, w * 0.9, h * 0.8).fill({ color, alpha: roomBreath });
 
-      // Suppress unused variable warning
       void color;
     }
+
+    // Layer 3: Animated torch flicker lights
+    for (const room of ROOMS) {
+      const { px, py, w, h } = roomPixelBounds(room);
+      const torchPositions = [
+        { x: px + 10, y: py + 10 },
+        { x: px + w - 10, y: py + 10 },
+        { x: px + 10, y: py + h - 10 },
+        { x: px + w - 10, y: py + h - 10 },
+      ];
+      for (let i = 0; i < torchPositions.length; i++) {
+        const tp = torchPositions[i];
+        // Each torch flickers independently with different phase
+        const phase = tp.x * 0.13 + tp.y * 0.07 + i * 2.1;
+        const flicker1 = 0.18 + 0.09 * Math.sin(t * 5.3 + phase);
+        const flicker2 = 0.12 + 0.05 * Math.sin(t * 8.7 + phase + 1.1);
+        const flicker3 = 0.06 + 0.04 * Math.sin(t * 13.1 + phase + 2.3);
+
+        // Outer warm glow pool
+        lg.circle(tp.x, tp.y, 35 + 5 * Math.sin(t * 4.1 + phase)).fill({ color: 0xFF6600, alpha: flicker1 * 0.35 });
+        // Mid warm ring
+        lg.circle(tp.x, tp.y, 22 + 3 * Math.sin(t * 5.3 + phase)).fill({ color: 0xFF8800, alpha: flicker1 });
+        // Bright torch core
+        lg.circle(tp.x, tp.y, 12).fill({ color: 0xFFAA33, alpha: flicker2 + 0.2 });
+        // Flame highlight
+        lg.circle(tp.x, tp.y - 6, 6).fill({ color: 0xFFFF88, alpha: flicker3 + 0.1 });
+      }
+    }
+
+    // Layer 4: Corridor veil — corridors are darker than rooms
+    // (corridors occupy the gaps between rooms; adding a uniform dark wash)
+    // Layer 5: Vignette — edges of canvas fade to pure black
+    const vigW = CANVAS_W;
+    const vigH = CANVAS_H;
+    // Top edge
+    lg.rect(0, 0, vigW, vigH * 0.15).fill({ color: 0x000000, alpha: 0.4 });
+    // Bottom edge
+    lg.rect(0, vigH * 0.85, vigW, vigH * 0.15).fill({ color: 0x000000, alpha: 0.35 });
+    // Left edge
+    lg.rect(0, 0, vigW * 0.08, vigH).fill({ color: 0x000000, alpha: 0.45 });
+    // Right edge
+    lg.rect(vigW * 0.92, 0, vigW * 0.08, vigH).fill({ color: 0x000000, alpha: 0.4 });
   }
 
   // ── Update agent sprites in their room containers ────────────────────────
@@ -909,19 +1067,19 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     const s = T;
 
     if (row >= 6 && row <= 9) {
-      // Floor tiles — various types
+      // Floor tiles — deep space dungeon palette
       const palettes: string[][] = [
-        ['#2a3040', '#252c38', '#222830'],  // stone (row 6)
-        ['#2a2218', '#241e14', '#1e1a10'],  // wood (row 7)
-        ['#261310', '#22110e', '#1e0f0c'],  // brick (row 8)
-        ['#1a1508', '#1c1606', '#201808'],  // gold (row 9)
+        ['#161c26', '#121720', '#0e131c'],  // deep void stone (row 6)
+        ['#1a1510', '#16120d', '#12100a'],  // dark ancient wood (row 7)
+        ['#180c0a', '#150b08', '#120a06'],  // deep crimson brick (row 8)
+        ['#111005', '#131103', '#151204'],  // ancient gold stone (row 9)
       ];
       const palette = palettes[Math.min(row - 6, 3)];
       const shade = palette[Math.floor(seededRand(seed) * palette.length)];
       ctx.fillStyle = shade;
       ctx.fillRect(x, y, s, s);
-      // Grid lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      // Subtle grid lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.lineWidth = 0.5;
       ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
     } else if (row >= 1 && row <= 5) {
@@ -978,7 +1136,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         height: '100%',
         overflow: 'hidden',
         cursor: isDraggingRef.current ? 'grabbing' : 'default',
-        background: '#0a0d0f',
+        background: '#020408',
       }}
     />
   );

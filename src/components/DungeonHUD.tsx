@@ -54,7 +54,7 @@ export function DungeonHUD({ minions, notifications = [], unreadCount = 0, onTog
 
       {/* Left: system status + minion busy lights */}
       <div className="hud-left">
-        <span className="hud-badge hud-badge--online">● SYS.ONLINE</span>
+        <span className="hud-badge hud-badge--online">● SYS.ONLINE</span>
         {minions && minions.length > 0 && (
           <div className="hud-minion-lights">
             {minions.map(m => (
@@ -81,7 +81,7 @@ export function DungeonHUD({ minions, notifications = [], unreadCount = 0, onTog
           <span className="hud-dragon">🐉</span>
           <div className="hud-title-block">
             <div className="hud-title">THE OVERLORD'S DUNGEON</div>
-            <div className="hud-sub">GRIM — DUNGEON MASTER COMMAND v2</div>
+            <div className="hud-sub">GRIM COMMAND INTERFACE ► v3.0 ► ONLINE</div>
           </div>
           <span className="hud-dragon hud-dragon--flip">🐉</span>
         </div>

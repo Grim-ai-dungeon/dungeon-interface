@@ -1,13 +1,17 @@
-/* ─── LeftStatusBar.css — Dungeon-themed left sidebar ───────────────────────── */
+/* ─── LeftStatusBar.css — Premium Space-Dungeon Agent Sidebar ──────────────── */
 
 .lsb-root {
-  width: 210px;
-  min-width: 210px;
-  max-width: 210px;
+  width: 215px;
+  min-width: 215px;
+  max-width: 215px;
   height: 100%;
   background:
-    linear-gradient(180deg, rgba(10,8,18,0.99) 0%, rgba(7,5,12,1) 100%);
-  border-right: 1px solid rgba(255, 167, 0, 0.18);
+    linear-gradient(180deg,
+      rgba(8,6,16,0.99) 0%,
+      rgba(5,4,10,1) 50%,
+      rgba(6,4,12,1) 100%
+    );
+  border-right: 1px solid rgba(255,136,0,0.14);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -15,13 +19,30 @@
   position: relative;
 }
 
-/* Vertical glow line on the right edge */
+/* Atmospheric edge glow */
+.lsb-root::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0; right: 0;
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(255,136,0,0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 30% at 50% 100%, rgba(123,47,190,0.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Right edge vertical glow line */
 .lsb-root::after {
   content: '';
   position: absolute;
-  right: 0; top: 15%; bottom: 15%;
+  right: 0; top: 10%; bottom: 10%;
   width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(255,167,0,0.18), transparent);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255,136,0,0.2) 30%,
+    rgba(255,136,0,0.12) 70%,
+    transparent
+  );
   pointer-events: none;
 }
 
@@ -30,29 +51,39 @@
 .lsb-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 12px 7px;
-  border-bottom: 1px solid rgba(255, 167, 0, 0.15);
+  gap: 7px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid rgba(255,136,0,0.12);
   background:
-    linear-gradient(90deg, rgba(255,167,0,0.07) 0%, rgba(255,167,0,0.02) 100%),
-    rgba(0,0,0,0.3);
+    linear-gradient(90deg, rgba(255,136,0,0.06) 0%, rgba(255,136,0,0.02) 100%),
+    rgba(0,0,0,0.4);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Scanline effect on header */
+.lsb-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,136,0,0.25), transparent);
 }
 
 .lsb-header-icon {
-  font-size: 12px;
-  color: #ffa700;
-  opacity: 0.7;
+  font-size: 11px;
+  color: rgba(255,136,0,0.8);
 }
 
 .lsb-header-text {
-  font-size: 11px;
-  font-family: 'Courier New', monospace;
-  font-weight: bold;
+  font-size: 10px;
+  font-family: 'Orbitron', 'Share Tech Mono', 'Courier New', monospace;
+  font-weight: 700;
   letter-spacing: 3px;
-  color: #ffa700;
-  opacity: 0.9;
+  color: rgba(255,136,0,0.9);
   flex: 1;
+  text-transform: uppercase;
 }
 
 /* Gateway connection button */
@@ -66,128 +97,144 @@
   padding: 2px 4px;
   border-radius: 2px;
   transition: background 0.15s;
-  opacity: 0.7;
+  opacity: 0.65;
+  position: relative;
+  z-index: 1;
 }
-.lsb-gateway-btn:hover { background: rgba(255,167,0,0.12); opacity: 1; }
+.lsb-gateway-btn:hover { background: rgba(255,136,0,0.1); opacity: 1; }
 .lsb-gateway-dot { font-size: 7px; line-height: 1; }
-.lsb-gateway-gear { font-size: 10px; color: #777; }
+.lsb-gateway-gear { font-size: 10px; color: #556; }
 
 /* ── Stats row ──────────────────────────────────────────────────────────────── */
 
 .lsb-stats-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 3px 12px 4px;
   font-size: 9px;
-  font-family: 'Courier New', monospace;
-  color: #3d4f5e;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  color: #2d3d4d;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid rgba(255, 167, 0, 0.06);
-  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255,136,0,0.05);
+  background: rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
-.lsb-stats-sep {
-  color: #2a3540;
-  font-size: 8px;
-}
-
-.lsb-stats-active {
-  color: #00aa55;
-}
-
-.lsb-stats-alert {
-  color: #cc3333;
-}
+.lsb-stats-sep { color: #202a34; font-size: 7px; }
+.lsb-stats-active { color: #00aa55; }
+.lsb-stats-alert { color: #aa2222; }
 
 /* ── Card list ──────────────────────────────────────────────────────────────── */
 
 .lsb-list {
   flex: 1;
   overflow-y: auto;
-  padding: 5px 5px 8px;
+  padding: 4px 5px 8px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  position: relative;
+  z-index: 1;
 }
 
 .lsb-list::-webkit-scrollbar { width: 3px; }
 .lsb-list::-webkit-scrollbar-track { background: transparent; }
-.lsb-list::-webkit-scrollbar-thumb { background: rgba(255, 167, 0, 0.2); border-radius: 2px; }
+.lsb-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255,136,0,0.15), rgba(255,136,0,0.3));
+  border-radius: 2px;
+}
 
 /* ── Card base ─────────────────────────────────────────────────────────────── */
 
 .lsb-card {
   width: 100%;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.018);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.016);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: 2px solid transparent;
   border-radius: 2px;
-  padding: 7px 9px 6px 10px;
+  padding: 8px 9px 7px 10px;
   cursor: pointer;
   text-align: left;
   transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, transform 0.12s;
   position: relative;
   box-sizing: border-box;
-  isolation: isolate;          /* stacking context for canvas overlay */
+  isolation: isolate;
 }
 
-/* Hover shimmer glow */
+/* Subtle inner top highlight */
+.lsb-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.03);
+  pointer-events: none;
+}
+
 .lsb-card:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 167, 0, 0.22);
-  border-left-color: rgba(255,167,0,0.35);
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255,136,0,0.18);
+  border-left-color: rgba(255,136,0,0.28);
   transform: translateX(1px);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
 
 /* Selected / open */
 .lsb-card--selected {
-  background: rgba(255, 167, 0, 0.07);
-  border-color: transparent;
-  border-left-color: var(--agent-color, #ffa700);
+  background:
+    linear-gradient(90deg,
+      rgba(255,136,0,0.07) 0%,
+      rgba(255,136,0,0.025) 60%,
+      transparent 100%
+    );
+  border-color: rgba(255,255,255,0.04);
+  border-left-color: var(--agent-color, #FF8800);
   box-shadow:
-    0 0 0 1px rgba(255,167,0,0.1),
-    inset 0 0 20px rgba(255,167,0,0.04);
+    0 0 0 1px rgba(255,136,0,0.08),
+    inset 0 0 30px rgba(255,136,0,0.03),
+    0 2px 10px rgba(0,0,0,0.5);
 }
 
 /* Active glow (agent currently running) */
 .lsb-card--active {
   box-shadow:
-    0 0 10px rgba(0,255,136,0.06),
-    inset 0 0 12px rgba(0,255,136,0.02);
+    0 0 10px rgba(0,255,136,0.05),
+    inset 0 0 14px rgba(0,255,136,0.015);
 }
 
 .lsb-card--active.lsb-card--selected {
   box-shadow:
-    0 0 12px var(--agent-color, #ffa700)33,
-    0 0 8px rgba(0,255,136,0.06),
-    inset 0 0 16px var(--agent-color, #ffa700)08;
+    0 0 0 1px rgba(255,136,0,0.1),
+    0 0 14px var(--agent-color, #FF8800)28,
+    0 0 8px rgba(0,255,136,0.05),
+    inset 0 0 20px var(--agent-color, #FF8800)06;
 }
 
 /* Error state */
 .lsb-card--error {
   border-left-color: #cc2222 !important;
-  background: rgba(200,30,30,0.06) !important;
-  box-shadow: inset 0 0 14px rgba(200,30,30,0.04);
+  background: rgba(200,30,30,0.05) !important;
+  box-shadow: inset 0 0 16px rgba(200,30,30,0.035) !important;
 }
 
 /* ── Room number badge ──────────────────────────────────────────────────────── */
 
 .lsb-room-badge {
   position: absolute;
-  top: 5px;
+  top: 6px;
   right: 6px;
   width: 13px;
   height: 13px;
-  background: rgba(255, 167, 0, 0.10);
-  border: 1px solid rgba(255, 167, 0, 0.18);
+  background: rgba(255,136,0,0.08);
+  border: 1px solid rgba(255,136,0,0.15);
   border-radius: 1px;
-  font-size: 8px;
-  font-family: 'Courier New', monospace;
-  font-weight: bold;
-  color: rgba(255,167,0,0.45);
+  font-size: 7px;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  color: rgba(255,136,0,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -201,7 +248,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .lsb-emoji {
@@ -209,7 +256,6 @@
   line-height: 1;
   transition: filter 0.2s, transform 0.2s;
   flex-shrink: 0;
-  /* Slight drop shadow to "lift" emoji on hover */
 }
 
 .lsb-card:hover .lsb-emoji {
@@ -218,15 +264,15 @@
 
 .lsb-card--selected .lsb-emoji,
 .lsb-card--active .lsb-emoji {
-  filter: drop-shadow(0 0 5px var(--agent-color, #ffa700));
-  transform: scale(1.08);
+  filter: drop-shadow(0 0 6px var(--agent-color, #FF8800));
+  transform: scale(1.1);
 }
 
-/* Name column (name + role stacked) */
+/* Name column */
 .lsb-name-col {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -238,11 +284,11 @@
 }
 
 .lsb-name {
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  font-weight: bold;
+  font-family: 'Orbitron', 'Share Tech Mono', 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 1.5px;
-  color: #c8b890;
+  color: #9A8C72;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -252,19 +298,18 @@
 }
 
 .lsb-card--selected .lsb-name {
-  color: var(--agent-color, #ffa700);
-  text-shadow: 0 0 8px color-mix(in srgb, var(--agent-color, #ffa700) 35%, transparent);
+  color: var(--agent-color, #FF8800);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--agent-color, #FF8800) 40%, transparent),
+    0 0 20px color-mix(in srgb, var(--agent-color, #FF8800) 15%, transparent);
 }
 
-.lsb-card:hover:not(.lsb-card--selected) .lsb-name {
-  color: #ddd0b0;
-}
+.lsb-card:hover:not(.lsb-card--selected) .lsb-name { color: #BFB49A; }
 
 .lsb-role {
   font-size: 9px;
-  font-weight: bold;
-  color: #4a5a68;
-  font-family: 'Courier New', monospace;
+  color: #364050;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
   letter-spacing: 0.3px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -273,7 +318,7 @@
 }
 
 .lsb-card--selected .lsb-role {
-  color: color-mix(in srgb, var(--agent-color, #ffa700) 40%, #4a5a68);
+  color: color-mix(in srgb, var(--agent-color, #FF8800) 35%, #364050);
 }
 
 /* ── Status dot ──────────────────────────────────────────────────────────────── */
@@ -286,29 +331,27 @@
 }
 
 .lsb-dot--active {
-  background: #00ff88;
-  box-shadow: 0 0 4px #00ff88;
+  background: #00FF88;
+  box-shadow: 0 0 5px #00FF88, 0 0 10px rgba(0,255,136,0.4);
   animation: lsb-pulse 2s infinite;
 }
 
 .lsb-dot--connected {
-  background: #00aa55;
-  box-shadow: 0 0 3px #00aa55;
+  background: #00AA55;
+  box-shadow: 0 0 4px #00AA55;
 }
 
-.lsb-dot--idle {
-  background: #2a3542;
-}
+.lsb-dot--idle { background: #1e2a34; }
 
 .lsb-dot--error {
-  background: #ff3333;
-  box-shadow: 0 0 4px #ff3333;
+  background: #FF3333;
+  box-shadow: 0 0 5px #FF3333, 0 0 10px rgba(255,51,51,0.4);
   animation: lsb-pulse 0.9s infinite;
 }
 
 @keyframes lsb-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.3; transform: scale(0.75); }
+  50% { opacity: 0.25; transform: scale(0.65); }
 }
 
 /* ── Current task preview ─────────────────────────────────────────────────── */
@@ -318,29 +361,28 @@
   align-items: baseline;
   gap: 4px;
   margin-bottom: 3px;
-  padding-left: 0;
   min-height: 14px;
 }
 
 .lsb-task-arrow {
-  font-size: 8px;
-  color: var(--agent-color, #ffa700);
-  opacity: 0.5;
+  font-size: 7px;
+  color: var(--agent-color, #FF8800);
+  opacity: 0.4;
   flex-shrink: 0;
-  line-height: 1.6;
+  line-height: 1.7;
   transition: opacity 0.18s;
 }
 
 .lsb-card:hover .lsb-task-arrow,
 .lsb-card--selected .lsb-task-arrow,
 .lsb-card--active .lsb-task-arrow {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .lsb-task-text {
   font-size: 9px;
-  font-family: 'Courier New', monospace;
-  color: #3a5060;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  color: #2a3d4e;
   font-style: italic;
   letter-spacing: 0.2px;
   line-height: 1.45;
@@ -352,16 +394,10 @@
   transition: color 0.18s;
 }
 
-.lsb-card:hover .lsb-task-text {
-  color: #4d6878;
-}
-
-.lsb-card--active .lsb-task-text {
-  color: #3d6a4a;
-}
-
+.lsb-card:hover .lsb-task-text { color: #3d5262; }
+.lsb-card--active .lsb-task-text { color: #284a36; }
 .lsb-card--selected .lsb-task-text {
-  color: color-mix(in srgb, var(--agent-color, #ffa700) 25%, #3a5060);
+  color: color-mix(in srgb, var(--agent-color, #FF8800) 20%, #2a3d4e);
 }
 
 /* ── Stuart cost chip ─────────────────────────────────────────────────────── */
@@ -370,37 +406,33 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px 1px 4px;
-  background: rgba(255,215,0,0.08);
-  border: 1px solid rgba(255,215,0,0.18);
+  padding: 2px 7px 2px 5px;
+  background: rgba(255,215,0,0.07);
+  border: 1px solid rgba(255,215,0,0.16);
   border-radius: 2px;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
   width: fit-content;
 }
 
-.lsb-cost-icon {
-  font-size: 9px;
-  line-height: 1;
-}
+.lsb-cost-icon { font-size: 8px; line-height: 1; }
 
 .lsb-cost-val {
   font-size: 9px;
-  font-family: 'Courier New', monospace;
-  font-weight: bold;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-weight: 400;
   color: #FFD700;
   letter-spacing: 0.5px;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 /* ── Model tag ───────────────────────────────────────────────────────────────── */
 
 .lsb-model {
   font-size: 8px;
-  font-weight: bold;
-  color: #2e3d4a;
-  font-family: 'Courier New', monospace;
+  color: #232e38;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
   margin-bottom: 2px;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
   font-style: italic;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -418,30 +450,29 @@
 }
 
 .lsb-status-label {
-  font-size: 9px;
-  font-family: 'Courier New', monospace;
-  font-weight: bold;
-  letter-spacing: 1.5px;
+  font-size: 8px;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-weight: 400;
+  letter-spacing: 2px;
   opacity: 0.9;
   flex-shrink: 0;
+  text-transform: uppercase;
 }
 
 .lsb-status-label[data-status='active']    { color: #00cc66; }
-.lsb-status-label[data-status='running']   { color: #00ee77; }
-.lsb-status-label[data-status='idle']      { color: #253540; }
-.lsb-status-label[data-status='connected'] { color: #00aa55; }
-.lsb-status-label[data-status='error']     { color: #cc2222; }
+.lsb-status-label[data-status='running']   { color: #00ee77; text-shadow: 0 0 6px rgba(0,238,119,0.35); }
+.lsb-status-label[data-status='idle']      { color: #1a2830; }
+.lsb-status-label[data-status='connected'] { color: #009944; }
+.lsb-status-label[data-status='error']     { color: #cc2222; text-shadow: 0 0 6px rgba(204,34,34,0.35); }
 
 /* ── Activity bar canvas ─────────────────────────────────────────────────── */
 
 .lsb-activity-bar {
-  /* width/height set as HTML attrs — canvas scaling */
   height: 3px;
   border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
-  opacity: 0.75;
-  /* Align to the right of the footer row */
+  opacity: 0.7;
   align-self: center;
   max-width: 60px;
 }

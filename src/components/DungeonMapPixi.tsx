@@ -25,7 +25,7 @@ import type { AgentId, AgentInfo, Room } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds } from '../dungeon/rooms';
 import type { PulseHandle } from './DungeonMap';
 import { TILE_SIZE } from '../dungeon/tiles';
-import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite, drawAgnesSprite } from '../pixi/PixiAgentSprites';
+import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite, drawAgnesSprite, preloadMinionSprites } from '../pixi/PixiAgentSprites';
 import { PixiParticleSystem } from '../pixi/PixiParticles';
 import { PixiEventPulseSystem } from '../pixi/PixiEventPulse';
 
@@ -288,6 +288,9 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       // Pre-slice textures
       buildTileTextures(tilesetTexture, tileTexturesRef.current);
+
+      // Pre-load real minion sprite PNGs (Agnes's pixel art)
+      preloadMinionSprites().catch(console.warn);
 
       // ── Root container (zoom/pan target) ────────────────────────────────
       const worldContainer = new Container();

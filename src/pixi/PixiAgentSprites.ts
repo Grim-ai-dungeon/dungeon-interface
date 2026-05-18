@@ -11,7 +11,10 @@ import { Container, Graphics, Sprite, Text, TextStyle, Assets, Texture } from 'p
 interface SpriteTextures {
   kevin: Texture | null;
   bob: Texture | null;
-  fallback: Texture | null;  // minion-south-128.png for Grim/Stuart/Agnes
+  grim: Texture | null;
+  stuart: Texture | null;
+  agnes: Texture | null;
+  fallback: Texture | null;  // minion-south-128.png — last-resort fallback
   loaded: boolean;
   loading: boolean;
 }
@@ -19,6 +22,9 @@ interface SpriteTextures {
 const SPRITE_CACHE: SpriteTextures = {
   kevin: null,
   bob: null,
+  grim: null,
+  stuart: null,
+  agnes: null,
   fallback: null,
   loaded: false,
   loading: false,
@@ -32,13 +38,19 @@ export async function preloadMinionSprites(): Promise<void> {
   if (SPRITE_CACHE.loaded || SPRITE_CACHE.loading) return;
   SPRITE_CACHE.loading = true;
   try {
-    const [kevin, bob, fallback] = await Promise.all([
+    const [kevin, bob, grim, stuart, agnes, fallback] = await Promise.all([
       Assets.load('/assets/sprites/kevin-minion-128.png').catch(() => null),
       Assets.load('/assets/sprites/bob-minion-128.png').catch(() => null),
+      Assets.load('/assets/sprites/grim-minion-128.png').catch(() => null),
+      Assets.load('/assets/sprites/stuart-minion-128.png').catch(() => null),
+      Assets.load('/assets/sprites/agnes-minion-128.png').catch(() => null),
       Assets.load('/assets/sprites/minion-south-128.png').catch(() => null),
     ]);
     SPRITE_CACHE.kevin = kevin as Texture | null;
     SPRITE_CACHE.bob = bob as Texture | null;
+    SPRITE_CACHE.grim = grim as Texture | null;
+    SPRITE_CACHE.stuart = stuart as Texture | null;
+    SPRITE_CACHE.agnes = agnes as Texture | null;
     SPRITE_CACHE.fallback = fallback as Texture | null;
     SPRITE_CACHE.loaded = true;
   } catch {
@@ -129,9 +141,9 @@ function renderPNGSprite(
 const SPRITE_HEIGHTS: Record<string, number> = {
   kevin:   52,  // kevin-minion-128.png (64x64 source) → 52px tall
   bob:     40,  // bob-minion-128.png (16x16 source) → 40px (upscaled pixel art)
-  grim:    56,  // fallback (128x128) → 56px
-  stuart:  48,  // fallback (128x128) → 48px
-  agnes:   52,  // fallback (128x128) → 52px
+  grim:    64,  // grim-minion-128.png (64x64 source) → 64px (boss is bigger!)
+  stuart:  48,  // stuart-minion-128.png (64x64 source) → 48px
+  agnes:   52,  // agnes-minion-128.png (64x64 source) → 52px
 };
 
 // ─── Grim 🐉 ──────────────────────────────────────────────────────────────────
@@ -159,9 +171,9 @@ export function drawGrimSprite(
   // Selection ring
   if (selected) selectedRing(g, cx, cy, 20, time);
 
-  // Try PNG sprite (fallback), else procedural Grim
+  // Try Grim's unique PNG sprite, then fallback, else procedural Grim
   const spriteDrawn = renderPNGSprite(
-    container, 'grim_sprite', SPRITE_CACHE.fallback,
+    container, 'grim_sprite', SPRITE_CACHE.grim ?? SPRITE_CACHE.fallback,
     cx, cy, SPRITE_HEIGHTS.grim, bob,
   );
 
@@ -393,11 +405,10 @@ export function drawAgnesSprite(
   groundShadow(g, cx, cy);
   if (selected) selectedRing(g, cx, cy, 18, time);
 
-  // Agnes uses the fallback generic minion sprite (minion-south-128.png)
+  // Agnes now has her own unique sprite — no tint needed
   const spriteDrawn = renderPNGSprite(
-    container, 'agnes_sprite', SPRITE_CACHE.fallback,
+    container, 'agnes_sprite', SPRITE_CACHE.agnes ?? SPRITE_CACHE.fallback,
     cx, cy, SPRITE_HEIGHTS.agnes, bob2,
-    0xFFBBDD, // pink tint to differentiate Agnes
   );
 
   if (!spriteDrawn) {
@@ -465,11 +476,10 @@ export function drawStuartSprite(
   groundShadow(g, cx, cy);
   if (selected) selectedRing(g, cx, cy, 17, time);
 
-  // Stuart uses the fallback generic minion sprite (minion-south-128.png)
+  // Stuart now has his own unique sprite — no tint needed
   const spriteDrawn = renderPNGSprite(
-    container, 'stuart_sprite', SPRITE_CACHE.fallback,
+    container, 'stuart_sprite', SPRITE_CACHE.stuart ?? SPRITE_CACHE.fallback,
     cx, cy, SPRITE_HEIGHTS.stuart, bob2,
-    0xFFEEAA, // golden tint for Stuart the treasurer
   );
 
   if (!spriteDrawn) {

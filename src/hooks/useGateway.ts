@@ -11,6 +11,12 @@ export interface GatewayMessage {
   text: string;
   timestamp: number;
   streaming?: boolean;
+  /**
+   * Image attachments — stored separately from text to avoid passing base64
+   * data through renderMessageText, which would cause a stack overflow when
+   * the regex runs over multi-MB strings.
+   */
+  attachments?: { dataUrl: string; name: string; mediaType: string }[];
 }
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -35,10 +41,21 @@ export interface TreasuryData {
   error?: string;
 }
 
+export interface ImageAttachment {
+  /** data: URL for display (never stored in message text) */
+  dataUrl: string;
+  /** MIME type, e.g. 'image/png' */
+  mediaType: string;
+  /** raw base64 payload — extracted from dataUrl */
+  base64: string;
+  /** original file name */
+  name: string;
+}
+
 interface UseGatewayReturn {
   connected: boolean;
   status: ConnectionStatus;
-  sendMessage: (agentId: string, text: string) => Promise<void>;
+  sendMessage: (agentId: string, text: string, images?: ImageAttachment[]) => Promise<void>;
   getHistory: (agentId: string) => Promise<void>;
   abortGeneration: (agentId: string) => Promise<void>;
   getAgentStatus: (agentId: string) => AgentRunStatus;
@@ -271,14 +288,18 @@ export function useGateway(): UseGatewayReturn {
     return agentStatuses[agentId] ?? 'idle';
   }, [generatingAgents, agentStatuses]);
 
-  const sendMessage = useCallback(async (agentId: string, text: string): Promise<void> => {
+  const sendMessage = useCallback(async (agentId: string, text: string, images?: ImageAttachment[]): Promise<void> => {
     const sessionKey = sessionKeyFor(agentId);
-    // Optimistically add user message to local state
+    // Optimistically add user message to local state.
+    // IMPORTANT: images are stored in a separate `attachments` field, NEVER in `text`.
+    // Embedding base64 data in text would cause renderMessageText to process multi-MB
+    // strings and stack-overflow the React render tree.
     const userMsg: GatewayMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       text,
       timestamp: Date.now(),
+      attachments: images?.map(img => ({ dataUrl: img.dataUrl, name: img.name, mediaType: img.mediaType })),
     };
     setMessages(prev => ({
       ...prev,
@@ -290,7 +311,8 @@ export function useGateway(): UseGatewayReturn {
     setAgentStatuses(prev => ({ ...prev, [agentId]: 'running' }));
 
     try {
-      await gateway.sendMessage(sessionKey, text);
+      const gatewayImages = images?.map(img => ({ mediaType: img.mediaType, base64: img.base64 }));
+      await gateway.sendMessage(sessionKey, text, gatewayImages?.length ? gatewayImages : undefined);
     } catch (err) {
       console.error(`[useGateway] sendMessage error:`, err);
       // Add error message to chat

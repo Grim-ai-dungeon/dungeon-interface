@@ -100,7 +100,22 @@ class GatewayClient {
     this.setStatus('disconnected');
   }
 
-  async sendMessage(sessionKey: string, message: string): Promise<unknown> {
+  async sendMessage(
+    sessionKey: string,
+    message: string,
+    images?: { mediaType: string; base64: string }[],
+  ): Promise<unknown> {
+    if (images && images.length > 0) {
+      // Build a multimodal content array: image blocks first, then text
+      const content: unknown[] = [
+        ...images.map(img => ({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
+        })),
+        { type: 'text', text: message },
+      ];
+      return this.request('chat.send', { sessionKey, content });
+    }
     return this.request('chat.send', { sessionKey, message });
   }
 

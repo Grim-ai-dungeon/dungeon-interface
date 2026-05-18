@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react';
 import type { AgentInfo, ActivityEntry } from '../types';
-import type { GatewayMessage, TreasuryData } from '../hooks/useGateway';
+import type { GatewayMessage, TreasuryData, ImageAttachment } from '../hooks/useGateway';
 import './RoomPanel.css';
 
 // ─── Agent color map ──────────────────────────────────────────────────────────
@@ -52,6 +52,12 @@ interface ChatMessage {
   sender: 'user' | 'agent' | 'system';
   text: string;
   streaming?: boolean;
+  /**
+   * Image attachments stored separately from text.
+   * NEVER merge base64 data into `text` — that would make renderMessageText
+   * run regex over multi-MB strings and stack-overflow the render tree.
+   */
+  attachments?: { dataUrl: string; name: string; mediaType: string }[];
 }
 
 interface ActivityEntryState extends ActivityEntry {
@@ -106,7 +112,7 @@ interface Props {
   /** Whether this is the frontmost window */
   isTopmost?: boolean;
   /** Gateway integration props */
-  gatewaySendMessage?: (agentId: string, text: string) => Promise<void>;
+  gatewaySendMessage?: (agentId: string, text: string, images?: ImageAttachment[]) => Promise<void>;
   gatewayGetHistory?: (agentId: string) => Promise<void>;
   gatewayMessages?: GatewayMessage[];
   gatewayConnected?: boolean;
@@ -219,6 +225,8 @@ export function RoomPanel({
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');
+  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
@@ -228,6 +236,8 @@ export function RoomPanel({
     sender: m.role === 'user' ? 'user' : m.role === 'agent' ? 'agent' : 'system',
     text: m.text,
     streaming: m.streaming,
+    // Carry attachments as-is — they are rendered as <img> tags, not through renderMessageText
+    attachments: m.attachments,
   }));
 
   const scrollChatToBottom = useCallback(() => {
@@ -248,20 +258,81 @@ export function RoomPanel({
 
   const handleChatSend = useCallback(async () => {
     const text = chatInput.trim();
-    if (!text) return;
+    // Allow sending with images even when text is empty
+    if (!text && pendingImages.length === 0) return;
     setChatInput('');
+    // Snapshot and clear pending images BEFORE the async send,
+    // so a re-render mid-send doesn't cause double-submission.
+    const imagesToSend = pendingImages.slice();
+    setPendingImages([]);
 
     if (gatewaySendMessage && gatewayConnected) {
-      await gatewaySendMessage(agent.id, text);
+      await gatewaySendMessage(agent.id, text, imagesToSend.length > 0 ? imagesToSend : undefined);
     } else {
       // Fallback: show disconnected notice
     }
-  }, [chatInput, agent.id, gatewaySendMessage, gatewayConnected]);
+  }, [chatInput, pendingImages, agent.id, gatewaySendMessage, gatewayConnected]);
 
   const handleChatKey = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { void handleChatSend(); }
     if (e.key === 'Escape') onClose();
   }, [handleChatSend, onClose]);
+
+  // ── Image attachment handlers ─────────────────────────────────────────────
+
+  /** Read a File and return an ImageAttachment without storing base64 in any text field */
+  const readImageFile = useCallback((file: File): Promise<ImageAttachment | null> => {
+    if (!file.type.startsWith('image/')) return Promise.resolve(null);
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // Extract base64 payload — strip the "data:<mime>;base64," prefix
+        const commaIdx = dataUrl.indexOf(',');
+        if (commaIdx === -1) { resolve(null); return; }
+        const base64 = dataUrl.slice(commaIdx + 1);
+        resolve({
+          dataUrl,   // kept for display only, never passed to renderMessageText
+          mediaType: file.type,
+          base64,
+          name: file.name,
+        });
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    // Reset so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    const results = await Promise.all(files.map(readImageFile));
+    const valid = results.filter((r): r is ImageAttachment => r !== null);
+    if (valid.length > 0) {
+      setPendingImages(prev => [...prev, ...valid]);
+    }
+  }, [readImageFile]);
+
+  /** Handle paste events on the chat input — intercept pasted images */
+  const handleChatPaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'));
+    if (imageItems.length === 0) return; // let normal paste proceed
+
+    // Images were pasted — prevent the default paste (which would insert binary garbage into the text input)
+    e.preventDefault();
+    const files = imageItems.map(item => item.getAsFile()).filter((f): f is File => f !== null);
+    const results = await Promise.all(files.map(readImageFile));
+    const valid = results.filter((r): r is ImageAttachment => r !== null);
+    if (valid.length > 0) {
+      setPendingImages(prev => [...prev, ...valid]);
+    }
+  }, [readImageFile]);
+
+  const handleRemoveImage = useCallback((idx: number) => {
+    setPendingImages(prev => prev.filter((_, i) => i !== idx));
+  }, []);
 
   // ── Activity state ─────────────────────────────────────────────────────────
   // We maintain a local vote overlay on top of history-derived entries
@@ -560,6 +631,10 @@ export function RoomPanel({
               messages={messages}
               chatInput={chatInput}
               setChatInput={setChatInput}
+              pendingImages={pendingImages}
+              onRemoveImage={handleRemoveImage}
+              onAttachClick={() => fileInputRef.current?.click()}
+              onPaste={handleChatPaste}
               onSend={() => { void handleChatSend(); }}
               onKeyDown={handleChatKey}
               chatInputRef={chatInputRef}
@@ -571,6 +646,15 @@ export function RoomPanel({
               onOpenConfig={onOpenGatewayConfig}
             />
           )}
+          {/* Hidden file input for image selection */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
           {activeTab === 'activity' && agent.id !== 'stuart' && (
             <ActivityTab
               entries={activityEntries}
@@ -634,7 +718,30 @@ export function RoomPanel({
 
 // ─── Inline text renderer: newlines, `code`, **bold** ──────────────────────────────────
 
+// ─── Inline text renderer: newlines, `code`, **bold** ──────────────────────────────────
+// SAFETY: Never call this with raw base64 or data-URL strings.
+// Image content must be stored in ChatMessage.attachments and rendered as <img> tags.
+// Passing a multi-MB base64 string here would cause catastrophic regex backtracking
+// and/or a stack overflow in React's reconciler.
+
+const BASE64_GUARD_RE = /^data:[a-z/]+;base64,/;
+const MAX_SAFE_TEXT_LEN = 50_000; // chars — anything longer is almost certainly binary/base64
+
 function renderMessageText(text: string): React.ReactNode[] {
+  // Guard: if the text looks like a raw base64 data URL or is suspiciously huge,
+  // show a safe truncated placeholder instead of feeding it to the regex engine.
+  if (BASE64_GUARD_RE.test(text)) {
+    return [<span key="b64" className="rp-msg-binary">[image data]</span>];
+  }
+  if (text.length > MAX_SAFE_TEXT_LEN) {
+    return [
+      <React.Fragment key="trunc">
+        {text.slice(0, MAX_SAFE_TEXT_LEN)}
+        <span className="rp-msg-truncated"> …(truncated)</span>
+      </React.Fragment>,
+    ];
+  }
+
   // Split into paragraphs on double-newline, then handle single newlines and inline marks
   const lines = text.split('\n');
   const result: React.ReactNode[] = [];
@@ -659,6 +766,10 @@ interface ChatTabProps {
   messages: ChatMessage[];
   chatInput: string;
   setChatInput: (v: string) => void;
+  pendingImages: ImageAttachment[];
+  onRemoveImage: (idx: number) => void;
+  onAttachClick: () => void;
+  onPaste: (e: React.ClipboardEvent) => void;
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   chatInputRef: React.RefObject<HTMLInputElement>;
@@ -671,10 +782,12 @@ interface ChatTabProps {
 }
 
 function ChatTab({
-  messages, chatInput, setChatInput, onSend, onKeyDown, chatInputRef, chatEndRef, agentName, agentId,
+  messages, chatInput, setChatInput, pendingImages, onRemoveImage, onAttachClick, onPaste,
+  onSend, onKeyDown, chatInputRef, chatEndRef, agentName, agentId,
   connected, generating, onOpenConfig,
 }: ChatTabProps) {
   const emptyFlavor = getFlavorBlock(CHAT_EMPTY_FLAVOR, agentId);
+  const canSend = !!(chatInput.trim() || pendingImages.length > 0);
   return (
     <div className="rp-chat">
       {/* Tab sub-header */}
@@ -714,7 +827,22 @@ function ChatTab({
                 {msg.sender === 'user' ? 'You' : msg.sender === 'agent' ? agentName : '⚙'}
               </span>
               <span className={`rp-msg-text${msg.streaming ? ' rp-msg-text--streaming' : ''}`}>
-                {msg.streaming ? msg.text : renderMessageText(msg.text)}
+                {/* Render attachments BEFORE text, as <img> tags — never as text */}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <span className="rp-msg-attachments">
+                    {msg.attachments.map((att, i) => (
+                      <img
+                        key={i}
+                        src={att.dataUrl}
+                        alt={att.name}
+                        className="rp-msg-attachment-img"
+                        title={att.name}
+                      />
+                    ))}
+                  </span>
+                )}
+                {/* Pass text through renderMessageText — never pass base64 here */}
+                {msg.text && (msg.streaming ? msg.text : renderMessageText(msg.text))}
                 {msg.streaming && <span className="rp-msg-cursor">▌</span>}
               </span>
             </div>
@@ -728,22 +856,53 @@ function ChatTab({
         )}
         <div ref={chatEndRef} />
       </div>
+
+      {/* Pending image thumbnails strip */}
+      {pendingImages.length > 0 && (
+        <div className="rp-chat-attachments-strip">
+          {pendingImages.map((img, idx) => (
+            <div key={idx} className="rp-chat-attachment-thumb">
+              <img src={img.dataUrl} alt={img.name} className="rp-chat-attachment-preview" />
+              <button
+                className="rp-chat-attachment-remove"
+                onClick={() => onRemoveImage(idx)}
+                title={`Remove ${img.name}`}
+                aria-label={`Remove image ${img.name}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="rp-chat-input-row">
+        {/* Attach button */}
+        <button
+          className="rp-chat-attach-btn"
+          onClick={onAttachClick}
+          disabled={!connected}
+          title="Attach images (or paste from clipboard)"
+          aria-label="Attach images"
+        >
+          📎
+        </button>
         <input
           ref={chatInputRef}
           type="text"
           className="rp-chat-input"
-          placeholder={connected ? 'Send a command...' : 'Gateway not connected'}
+          placeholder={connected ? 'Send a command… (paste images with Ctrl+V)' : 'Gateway not connected'}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           disabled={!connected}
           autoFocus
         />
         <button
           className="rp-chat-send-btn"
           onClick={onSend}
-          disabled={!chatInput.trim() || !connected || generating}
+          disabled={!canSend || !connected || generating}
         >
           {generating ? '...' : '▶'}
         </button>

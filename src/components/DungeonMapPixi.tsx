@@ -91,6 +91,15 @@ const ROOM_EMOJIS: Record<string, string> = {
   agnes:  '🎨',
 };
 
+// Room background image paths (generated isometric art)
+const ROOM_BG_IMAGES: Record<string, string> = {
+  grim:   '/assets/rooms/grim-chamber.png',
+  bob:    '/assets/rooms/bob-library.png',
+  kevin:  '/assets/rooms/kevin-workshop.png',
+  stuart: '/assets/rooms/treasury.png',
+  agnes:  '/assets/rooms/agnes-studio.png',
+};
+
 // ─── Zoom/Pan constants ───────────────────────────────────────────────────────
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3.5;
@@ -141,6 +150,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const roomContainersRef = useRef<Map<string, Container>>(new Map());
   const glowGraphicsRef = useRef<Map<string, Graphics>>(new Map());
   const tileTexturesRef = useRef<Map<string, Texture>>(new Map());
+  const roomBgTexturesRef = useRef<Map<string, Texture>>(new Map());
   const lightingLayerRef = useRef<Graphics | null>(null);
   const animFrameRef = useRef<number>(0);
   const hoveredIdRef = useRef<AgentId | null>(null);
@@ -288,6 +298,18 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       // Pre-slice textures
       buildTileTextures(tilesetTexture, tileTexturesRef.current);
+
+      // ── Load room background textures (with graceful fallback) ──────────
+      const bgLoadPromises = Object.entries(ROOM_BG_IMAGES).map(async ([roomId, path]) => {
+        try {
+          const tex = await Assets.load(path);
+          roomBgTexturesRef.current.set(roomId, tex);
+        } catch {
+          // Room bg image not found — will use procedural tiles as fallback
+        }
+      });
+      await Promise.allSettled(bgLoadPromises);
+      if (destroyed) { app.destroy(true); return; }
 
       // Pre-load real minion sprite PNGs (Agnes's pixel art)
       preloadMinionSprites().catch(console.warn);
@@ -493,38 +515,60 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   function buildRoom(_app: Application, container: Container, room: typeof ROOMS[0]) {
     const { px, py, w, h } = roomPixelBounds(room);
 
-    // Floor layer
-    const floorTiles = getFloorTiles(room.floorType);
-    const wallMids = TILE_DEFS.wallMid;
+    // ── Try to use custom isometric background image ───────────────────────
+    const bgTex = roomBgTexturesRef.current.get(room.id);
+    if (bgTex) {
+      // Dark base fill
+      const base = new Graphics();
+      base.rect(px, py, w, h).fill(0x050308);
+      container.addChild(base);
 
-    // Scale tiles to our TILE_SIZE (source is 16px, target is 48px → scale 3x)
-    const scale = TILE_SIZE / T; // 3.0
+      // Scale the background image to exactly fill the room tile area
+      const bgSprite = new Sprite(bgTex);
+      bgSprite.x = px;
+      bgSprite.y = py;
+      bgSprite.width = w;
+      bgSprite.height = h;
+      bgSprite.alpha = 0.90;
+      container.addChild(bgSprite);
 
-    // Draw walls around entire room first
-    for (let gy = -1; gy <= room.heightTiles; gy++) {
-      for (let gx = -1; gx <= room.widthTiles; gx++) {
-        const isInterior = gx >= 0 && gx < room.widthTiles && gy >= 0 && gy < room.heightTiles;
-        const tpx = px + gx * TILE_SIZE;
-        const tpy = py + gy * TILE_SIZE;
+      // Subtle dark vignette at room edges for clean transitions
+      const vignette = new Graphics();
+      const edgeSize = 6;
+      const vAlpha = 0.5;
+      vignette.rect(px, py, w, edgeSize).fill({ color: 0x000000, alpha: vAlpha });
+      vignette.rect(px, py + h - edgeSize, w, edgeSize).fill({ color: 0x000000, alpha: vAlpha });
+      vignette.rect(px, py, edgeSize, h).fill({ color: 0x000000, alpha: vAlpha });
+      vignette.rect(px + w - edgeSize, py, edgeSize, h).fill({ color: 0x000000, alpha: vAlpha });
+      container.addChild(vignette);
+    } else {
+      // ── Fallback: procedural tile rendering ──────────────────────────────
+      const floorTiles = getFloorTiles(room.floorType);
+      const wallMids = TILE_DEFS.wallMid;
+      const scale = TILE_SIZE / T; // 3.0
 
-        if (isInterior) {
-          // Floor tile
-          const rect = pickTile(floorTiles, room.gridX + gx, room.gridY + gy);
-          const sp = new Sprite(getTileTex(rect));
-          sp.x = tpx;
-          sp.y = tpy;
-          sp.scale.set(scale);
-          container.addChild(sp);
-        } else {
-          // Wall tile
-          const wallRect = pickTile(wallMids, room.gridX + gx, room.gridY + gy);
-          const sp = new Sprite(getTileTex(wallRect));
-          sp.x = tpx;
-          sp.y = tpy;
-          sp.scale.set(scale);
-          // Wall tint — slightly darker
-          sp.tint = 0xaaaaaa;
-          container.addChild(sp);
+      for (let gy = -1; gy <= room.heightTiles; gy++) {
+        for (let gx = -1; gx <= room.widthTiles; gx++) {
+          const isInterior = gx >= 0 && gx < room.widthTiles && gy >= 0 && gy < room.heightTiles;
+          const tpx = px + gx * TILE_SIZE;
+          const tpy = py + gy * TILE_SIZE;
+
+          if (isInterior) {
+            const rect = pickTile(floorTiles, room.gridX + gx, room.gridY + gy);
+            const sp = new Sprite(getTileTex(rect));
+            sp.x = tpx;
+            sp.y = tpy;
+            sp.scale.set(scale);
+            container.addChild(sp);
+          } else {
+            const wallRect = pickTile(wallMids, room.gridX + gx, room.gridY + gy);
+            const sp = new Sprite(getTileTex(wallRect));
+            sp.x = tpx;
+            sp.y = tpy;
+            sp.scale.set(scale);
+            sp.tint = 0xaaaaaa;
+            container.addChild(sp);
+          }
         }
       }
     }

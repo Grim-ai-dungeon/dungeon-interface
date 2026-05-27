@@ -282,11 +282,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(ellipse 140% 50% at 50% -5%, rgba(255,120,0,0.03) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 80% at -5% 50%, rgba(123,47,190,0.025) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 80% at 105% 50%, rgba(0,229,255,0.015) 0%, transparent 60%),
-    var(--void);
+  background: #0a0a0f;
   position: relative;
   opacity: 1;
   transition: opacity 0.6s ease;
@@ -306,7 +302,7 @@ body {
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   padding: 0 14px;
   height: 58px;
   min-height: 58px;
@@ -358,9 +354,11 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  flex: 2;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1;
+  pointer-events: none;
 }
 
 .hud-center-title-block {
@@ -377,27 +375,28 @@ body {
   flex: 1;
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
+}
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
 }
 
 .hud-dragon {
   font-size: 28px;
   display: inline-block;
   filter:
-    drop-shadow(0 0 8px rgba(255,100,0,0.9))
-    drop-shadow(0 0 20px rgba(255,80,0,0.4));
-  animation: hud-dragon-flicker 7s ease-in-out infinite;
+    drop-shadow(0 0 10px rgba(255,100,0,0.95))
+    drop-shadow(0 0 22px rgba(255,80,0,0.5));
 }
 
 .hud-dragon--flip {
   transform: scaleX(-1);
-}
-
-@keyframes hud-dragon-flicker {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(255,100,0,0.9)) drop-shadow(0 0 20px rgba(255,80,0,0.4)); }
-  20% { filter: drop-shadow(0 0 4px rgba(255,100,0,0.5)) drop-shadow(0 0 10px rgba(255,80,0,0.2)); }
-  40% { filter: drop-shadow(0 0 16px rgba(255,150,0,1)) drop-shadow(0 0 35px rgba(255,100,0,0.7)); }
-  60% { filter: drop-shadow(0 0 6px rgba(255,100,0,0.7)); }
-  80% { filter: drop-shadow(0 0 12px rgba(255,130,0,0.95)) drop-shadow(0 0 28px rgba(255,90,0,0.5)); }
 }
 
 .hud-title-block {
@@ -465,14 +464,6 @@ body {
   color: rgba(var(--ember-rgb) / 0.25);
   font-size: 20px;
   line-height: 1;
-}
-
-.hud-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-  z-index: 1;
 }
 
 /* Scrying Portal HUD button */
@@ -823,7 +814,7 @@ body {
 .dungeon-map-canvas-wrap {
   flex: 1;
   min-height: 0;
-  background: #04060a;
+  background: #050508;
   border: 1px solid rgba(var(--ember-rgb) / 0.18);
   border-radius: 3px;
   overflow: hidden;

@@ -1,70 +1,75 @@
 // ─── Room definitions and layout ──────────────────────────────────────────────
 // Grid-based 2D top-down dungeon layout.
-// Tile size = 48px. Compact station-style layout — rooms share walls, no corridors.
+// Tile size = 48px. Clean grid layout with gaps between rooms (no shared walls).
 //
-// Layout (col, row):
-//   [Bob's Lab 4x4]  [Grim's Chamber 5x5]  [Kevin's Workshop 4x4]
-//   [Agnes's Studio 4x4]  [Stuart's Treasury 5x3]
+// Layout (col, row) — all rooms are 5×5 tiles:
+//   Top row:    [Bob col=0]   [Grim col=7]   [Kevin col=14]
+//   Bottom row: [Agnes col=4] [Stuart col=11]   (centered under top row)
 //
-// Row 0: all top-row rooms start at gridY=0
-// Row 1: bottom rooms start at gridY=5
+// Gap of 2 tiles between rooms.
+// Top row starts at gridY=0, bottom row starts at gridY=7 (5 tiles + 2 gap)
 
 import type { Room, AgentId } from '../types';
 import { TILE_SIZE } from './tiles';
 
-export const GRID_COLS = 13;
-export const GRID_ROWS = 8;
+export const GRID_COLS = 19;
+export const GRID_ROWS = 12;
 
-// Room definitions in tile-grid coords — rooms are adjacent, no gaps
+// Room definitions in tile-grid coords — clean grid with gaps
 export const ROOMS: Room[] = [
   {
     id: 'bob' as AgentId,
     label: "Bob's Library",
     gridX: 0,
     gridY: 0,
-    widthTiles: 4,
-    heightTiles: 4,
+    widthTiles: 5,
+    heightTiles: 5,
     floorType: 'stone',
+    backgroundImage: './rooms/bob.png',
   },
   {
     id: 'grim' as AgentId,
     label: "Grim's Chamber",
-    gridX: 4,
+    gridX: 7,
     gridY: 0,
     widthTiles: 5,
     heightTiles: 5,
     floorType: 'stone',
+    backgroundImage: './rooms/grim.png',
   },
   {
     id: 'kevin' as AgentId,
     label: "Kevin's Workshop",
-    gridX: 9,
+    gridX: 14,
     gridY: 0,
-    widthTiles: 4,
-    heightTiles: 4,
+    widthTiles: 5,
+    heightTiles: 5,
     floorType: 'brick',
+    backgroundImage: './rooms/kevin.png',
   },
   {
     id: 'agnes' as AgentId,
     label: "Agnes's Studio",
-    gridX: 0,
-    gridY: 4,
-    widthTiles: 4,
-    heightTiles: 4,
+    gridX: 4,
+    gridY: 7,
+    widthTiles: 5,
+    heightTiles: 5,
     floorType: 'stone',
+    backgroundImage: './rooms/agnes.png',
   },
   {
     id: 'stuart' as AgentId,
     label: "Stuart's Treasury",
-    gridX: 4,
-    gridY: 5,
+    gridX: 11,
+    gridY: 7,
     widthTiles: 5,
-    heightTiles: 3,
+    heightTiles: 5,
     floorType: 'gold',
+    backgroundImage: './rooms/stuart.png',
   },
 ];
 
-// Corridors: empty — rooms are adjacent (station-style layout)
+// Corridors: empty — pure void between rooms
 export interface CorridorSegment {
   x: number;
   y: number;
@@ -100,14 +105,14 @@ export const CANVAS_H = GRID_ROWS * TILE_SIZE;
  * Strategy: scan row by row, column by column for a gap that fits.
  */
 export function getNextRoomPosition(rooms: Room[]): { gridX: number; gridY: number } {
-  const DEFAULT_W = 4;
-  const DEFAULT_H = 4;
+  const DEFAULT_W = 5;
+  const DEFAULT_H = 5;
 
-  // Build a set of occupied cells (with 1-tile padding to avoid walls merging weirdly)
+  // Build a set of occupied cells (with 2-tile gap padding)
   const occupied = new Set<string>();
   for (const r of rooms) {
-    for (let x = r.gridX - 1; x < r.gridX + r.widthTiles + 1; x++) {
-      for (let y = r.gridY - 1; y < r.gridY + r.heightTiles + 1; y++) {
+    for (let x = r.gridX - 2; x < r.gridX + r.widthTiles + 2; x++) {
+      for (let y = r.gridY - 2; y < r.gridY + r.heightTiles + 2; y++) {
         occupied.add(`${x},${y}`);
       }
     }
@@ -128,5 +133,5 @@ export function getNextRoomPosition(rooms: Room[]): { gridX: number; gridY: numb
 
   // Fallback — place below all rooms
   const maxY = Math.max(...rooms.map(r => r.gridY + r.heightTiles));
-  return { gridX: 0, gridY: maxY + 1 };
+  return { gridX: 0, gridY: maxY + 2 };
 }

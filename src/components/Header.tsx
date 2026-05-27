@@ -124,7 +124,7 @@ export function Header() {
           font-weight: 900;
           color: var(--gold);
           letter-spacing: 0.15em;
-          animation: flicker 8s ease-in-out infinite;
+          text-shadow: 0 0 10px rgba(255,215,0,0.6), 0 0 25px rgba(255,215,0,0.25);
           text-transform: uppercase;
           line-height: 1;
         }

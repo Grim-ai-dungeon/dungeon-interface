@@ -1,72 +1,26 @@
-// ─── DungeonMapPixi.tsx — PixiJS v8 dungeon map with real tileset ─────────────
-// Uses 0x72's DungeonTileset II (512x512, 16x16 tiles, 32×32 grid)
-// Tile grid reference (col, row) — 0-indexed:
-//   Floor tiles:
-//     Stone floor:   col 0-5, row 6  (inner floor variants)
-//     Dark floor:    col 0, row 6
-//   Wall tiles:
-//     Top wall:      col 0-7, row 2 (mid wall face)
-//     Wall face:     col 0, row 2
-//   0x72 DungeonTileset II layout is 16px per tile, 32 cols × 32 rows
+// ─── DungeonMapPixi.tsx — PixiJS v8 dungeon map — sci-fi panel style ──────────
+// Clean sci-fi look: AI-generated room backgrounds with colored borders, glows, corner brackets.
+// Room interiors use AI-generated images; overlays and labels rendered on top.
 
 import React, { useRef, useEffect } from 'react';
 import {
   Application,
-  Sprite,
   Container,
   Graphics,
-  Texture,
-  Rectangle,
-  Assets,
   Text,
   TextStyle,
+  Sprite,
+  Assets,
 } from 'pixi.js';
 import type { AgentId, AgentInfo, Room } from '../types';
 import { ROOMS, CORRIDORS, CANVAS_W, CANVAS_H, roomCenter, roomPixelBounds } from '../dungeon/rooms';
 import type { PulseHandle } from './DungeonMap';
 import { TILE_SIZE } from '../dungeon/tiles';
-import { drawGrimSprite, drawBobSprite, drawKevinSprite, drawStuartSprite, drawAgnesSprite, preloadMinionSprites } from '../pixi/PixiAgentSprites';
+import { drawAgnesSprite, preloadMinionSprites } from '../pixi/PixiAgentSprites';
 import { PixiParticleSystem } from '../pixi/PixiParticles';
 import { PixiEventPulseSystem } from '../pixi/PixiEventPulse';
 
-// ─── 0x72 DungeonTileset II tile definitions ──────────────────────────────────
-// The tileset is 512×512 with 16×16 pixel tiles = 32×32 grid
-const T = 16; // tile size in the source tileset
-
-// Tile coordinate helpers — (col, row) → pixel rect in the tileset
-function tileRect(col: number, row: number): Rectangle {
-  return new Rectangle(col * T, row * T, T, T);
-}
-
-// Key tile regions from 0x72 DungeonTileset II (16x16 grid refs)
-// Row 0-1: characters/entities
-// Row 2-3: wall tops and faces
-// Row 4-5: wall variants / props
-// Row 6-7: floor tiles (stone)
-// Row 8-9: special floors
-const TILE_DEFS = {
-  // Floor tiles — various stone floor variants (row 6)
-  floorStone:    [tileRect(0,6), tileRect(1,6), tileRect(2,6), tileRect(3,6)],
-  // Wood/plank floor for library (row 7)
-  floorWood:     [tileRect(0,7), tileRect(1,7), tileRect(2,7)],
-  // Brick/red floor for workshop (row 8)  
-  floorBrick:    [tileRect(0,8), tileRect(1,8), tileRect(2,8)],
-  // Gold/special floor for treasury (row 9)
-  floorGold:     [tileRect(0,9), tileRect(1,9), tileRect(2,9)],
-  // Wall mid face (row 2)
-  wallMid:       [tileRect(0,2), tileRect(1,2), tileRect(2,2), tileRect(3,2)],
-  // Wall top (row 1 — the "top" of the wall seen from above)
-  wallTop:       [tileRect(0,1), tileRect(1,1), tileRect(2,1)],
-  // Wall side corners
-  wallLeft:      tileRect(4,2),
-  wallRight:     tileRect(5,2),
-  // Column / pillar
-  pillar:        tileRect(9,3),
-  // Corridor floor
-  corridorFloor: [tileRect(0,6), tileRect(1,6)],
-};
-
-// ─── Room color palette (for tinting and glow) ────────────────────────────────
+// ─── Room color palette ───────────────────────────────────────────────────────
 const ROOM_COLORS: Record<string, number> = {
   grim:   0xFFA700,
   bob:    0x6699CC,
@@ -83,48 +37,12 @@ const ROOM_LABELS: Record<string, string> = {
   agnes:  "AGNES'S STUDIO",
 };
 
-const ROOM_EMOJIS: Record<string, string> = {
-  grim:   '🐉',
-  bob:    '📚',
-  kevin:  '🔧',
-  stuart: '💰',
-  agnes:  '🎨',
-};
-
-// Room background image paths (generated isometric art)
-const ROOM_BG_IMAGES: Record<string, string> = {
-  grim:   '/assets/rooms/grim-chamber.png',
-  bob:    '/assets/rooms/bob-library.png',
-  kevin:  '/assets/rooms/kevin-workshop.png',
-  stuart: '/assets/rooms/treasury.png',
-  agnes:  '/assets/rooms/agnes-studio.png',
-};
-
 // ─── Zoom/Pan constants ───────────────────────────────────────────────────────
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3.5;
 const DEFAULT_ZOOM = 1.0;
-// PAN_DRAG_THRESHOLD removed — drag detection now uses 3px inline check
-
-// ─── Seeded random (deterministic per tile position) ─────────────────────────
-function seededRand(seed: number): number {
-  let s = Math.abs(seed | 0);
-  s = (s ^ 61) ^ (s >>> 16);
-  s += s << 3;
-  s ^= s >>> 4;
-  s *= 0x27d4eb2d;
-  s ^= s >>> 15;
-  return (s >>> 0) / 0xffffffff;
-}
-
-// ─── Pick a tile variant deterministically for a position ─────────────────────
-function pickTile(variants: Rectangle[], gridX: number, gridY: number): Rectangle {
-  const idx = Math.floor(seededRand(gridX * 997 + gridY * 1303) * variants.length);
-  return variants[idx];
-}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
-// Custom room metadata (populated when new agents are added)
 export interface CustomRoomMeta {
   id: string;
   label: string;
@@ -138,7 +56,6 @@ interface Props {
   onRoomClick: (id: AgentId) => void;
   onRoomHover: (id: AgentId | null) => void;
   pulseHandleRef?: React.MutableRefObject<PulseHandle | null>;
-  /** Metadata for custom (dynamically-added) rooms */
   customRoomMeta?: CustomRoomMeta[];
 }
 
@@ -149,17 +66,13 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const containerRef = useRef<Container | null>(null);
   const roomContainersRef = useRef<Map<string, Container>>(new Map());
   const glowGraphicsRef = useRef<Map<string, Graphics>>(new Map());
-  const tileTexturesRef = useRef<Map<string, Texture>>(new Map());
-  const roomBgTexturesRef = useRef<Map<string, Texture>>(new Map());
   const lightingLayerRef = useRef<Graphics | null>(null);
   const animFrameRef = useRef<number>(0);
   const hoveredIdRef = useRef<AgentId | null>(null);
   const spriteContainersRef = useRef<Map<string, Container>>(new Map());
   const particleSystemRef = useRef<PixiParticleSystem | null>(null);
   const pulseSysRef = useRef<PixiEventPulseSystem | null>(null);
-  // Custom room meta ref (up-to-date in render loop)
   const customRoomMetaRef = useRef<CustomRoomMeta[]>([]);
-  // Layers refs for adding rooms dynamically
   const roomLayerRef = useRef<Container | null>(null);
   const glowLayerRef = useRef<Container | null>(null);
   const labelLayerRef = useRef<Container | null>(null);
@@ -178,14 +91,13 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const totalDragRef = useRef(0);
 
-  // ── Agent state ref (avoid stale closure in render loop) ───────────────────
+  // ── Agent state ref ─────────────────────────────────────────────────────────
   const agentsRef = useRef(agents);
   const selectedIdRef = useRef(selectedId);
   useEffect(() => { agentsRef.current = agents; }, [agents]);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { customRoomMetaRef.current = customRoomMeta; }, [customRoomMeta]);
 
-  // ── Canvas size tracking ────────────────────────────────────────────────────
   const canvasSizeRef = useRef({ w: 800, h: 600 });
 
   // ── Expose pulse handle ──────────────────────────────────────────────────
@@ -195,59 +107,49 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         fire: (agentId, _kind) => {
           const pulseSys = pulseSysRef.current;
           if (!pulseSys) return;
-          // Fire pulse from Grim's room to the target agent's room
           const grimRoom = ROOMS.find(r => r.id === 'grim');
           const targetRoom = ROOMS.find(r => r.id === agentId);
           if (!grimRoom || !targetRoom) return;
           const from = roomCenter(grimRoom);
           const to = roomCenter(targetRoom);
-          const ROOM_COLORS_MAP: Record<string, number> = {
-            grim: 0xFFA700, bob: 0x6699CC, kevin: 0xFF5522, stuart: 0xFFD700, agnes: 0xFF66AA,
-          };
-          const color = ROOM_COLORS_MAP[agentId] ?? 0xffffff;
+          const color = ROOM_COLORS[agentId] ?? 0xffffff;
           pulseSys.fire(from.cx, from.cy, to.cx, to.cy, color);
         },
       };
     }
   }, [pulseHandleRef]);
 
-  // ── Dynamic room addition — triggered when customRoomMeta changes ──────────────
+  // ── Dynamic room addition ──────────────────────────────────────────────────
   const builtRoomsRef = useRef<Set<string>>(new Set(['bob', 'grim', 'kevin', 'agnes', 'stuart']));
 
   useEffect(() => {
     if (!appRef.current) return;
-    const app = appRef.current;
 
     for (const meta of customRoomMeta) {
       if (builtRoomsRef.current.has(meta.id)) continue;
       builtRoomsRef.current.add(meta.id);
 
-      // Find the room definition added to ROOMS[]
       const room = ROOMS.find(r => r.id === meta.id);
       if (!room) continue;
 
-      // Build room graphics
       if (roomLayerRef.current) {
         const roomCont = new Container();
         roomCont.label = room.id;
         roomContainersRef.current.set(room.id, roomCont);
         roomLayerRef.current.addChild(roomCont);
-        buildRoom(app, roomCont, room);
+        buildRoom(roomCont, room);
       }
 
-      // Add glow graphic
       if (glowLayerRef.current) {
         const glow = new Graphics();
         glowGraphicsRef.current.set(room.id, glow);
         glowLayerRef.current.addChild(glow);
       }
 
-      // Add label
       if (labelLayerRef.current) {
         drawSingleRoomLabel(labelLayerRef.current, room, meta);
       }
 
-      // Add sprite container
       if (spriteLayerRef.current) {
         const sc = new Container();
         sc.label = `sprite_${room.id}`;
@@ -270,12 +172,11 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const H = rect.height || 600;
       canvasSizeRef.current = { w: W, h: H };
 
-      // ── Initialize PixiJS Application (v8 async init) ───────────────────
       const app = new Application();
       await app.init({
         width: W,
         height: H,
-        background: 0x020408,
+        background: 0x050508,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
@@ -286,32 +187,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       appRef.current = app;
       mountRef.current!.appendChild(app.canvas);
 
-      // ── Load tileset texture ─────────────────────────────────────────────
-      let tilesetTexture: Texture;
-      try {
-        tilesetTexture = await Assets.load('/assets/tilesets/dungeon-tileset.png');
-      } catch {
-        // Fallback: create a procedural tileset texture
-        tilesetTexture = createFallbackTileTexture(app);
-      }
-      if (destroyed) { app.destroy(true); return; }
-
-      // Pre-slice textures
-      buildTileTextures(tilesetTexture, tileTexturesRef.current);
-
-      // ── Load room background textures (with graceful fallback) ──────────
-      const bgLoadPromises = Object.entries(ROOM_BG_IMAGES).map(async ([roomId, path]) => {
-        try {
-          const tex = await Assets.load(path);
-          roomBgTexturesRef.current.set(roomId, tex);
-        } catch {
-          // Room bg image not found — will use procedural tiles as fallback
-        }
-      });
-      await Promise.allSettled(bgLoadPromises);
-      if (destroyed) { app.destroy(true); return; }
-
-      // Pre-load real minion sprite PNGs (Agnes's pixel art)
+      // Pre-load Agnes sprite PNGs
       preloadMinionSprites().catch(console.warn);
 
       // ── Root container (zoom/pan target) ────────────────────────────────
@@ -319,15 +195,15 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       app.stage.addChild(worldContainer);
       containerRef.current = worldContainer;
 
-      // ── Build dungeon map layers ─────────────────────────────────────────
-      buildDungeon(app, worldContainer, tilesetTexture);
+      // ── Build dungeon map ───────────────────────────────────────────────
+      buildDungeon(app, worldContainer);
 
       // ── Lighting layer ───────────────────────────────────────────────────
       const lightingLayer = new Graphics();
       worldContainer.addChild(lightingLayer);
       lightingLayerRef.current = lightingLayer;
 
-      // ── Sprite containers for each agent ────────────────────────────────
+      // ── Sprite containers ────────────────────────────────────────────────
       const spriteLayer = new Container();
       worldContainer.addChild(spriteLayer);
       spriteLayerRef.current = spriteLayer;
@@ -344,10 +220,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       particleSystemRef.current = new PixiParticleSystem(fxLayer);
       pulseSysRef.current = new PixiEventPulseSystem(fxLayer);
 
-      // Center the dungeon initially
       centerDungeon(W, H);
-
-      // ── Interaction ──────────────────────────────────────────────────────
       setupInteraction(app);
 
       // ── Render loop ──────────────────────────────────────────────────────
@@ -356,10 +229,9 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         if (destroyed) return;
         animFrameRef.current = requestAnimationFrame(renderLoop);
 
-        const dt = time - lastTime;
+        const dt = Math.min(time - lastTime, 100);
         lastTime = time;
 
-        // Smooth zoom/pan
         const lerpSpeed = 0.14;
         zoomRef.current += (targetZoomRef.current - zoomRef.current) * lerpSpeed;
         panXRef.current += (targetPanXRef.current - panXRef.current) * lerpSpeed;
@@ -371,39 +243,12 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
           worldContainer.y = panYRef.current;
         }
 
-        // Update glow/selection effects
         updateGlowEffects(time);
-
-        // Update lighting
         updateLighting(time);
-
-        // Draw minion sprites
         updateAgentSprites(time / 1000);
 
-        // Update particles and pulses
         if (particleSystemRef.current) {
           particleSystemRef.current.update(dt);
-          // Ambient torch spark emission — tiny motes from each room's torches
-          if (Math.random() < 0.25) {
-            const roomIdx = Math.floor(Math.random() * ROOMS.length);
-            const room = ROOMS[roomIdx];
-            const { px, py, w, h } = roomPixelBounds(room);
-            const torchPositions = [
-              { x: px + 10, y: py + 10 },
-              { x: px + w - 10, y: py + 10 },
-              { x: px + 10, y: py + h - 10 },
-              { x: px + w - 10, y: py + h - 10 },
-            ];
-            const tp = torchPositions[Math.floor(Math.random() * torchPositions.length)];
-            const color = ROOM_COLORS[room.id] ?? 0xFF8800;
-            particleSystemRef.current.emit(tp.x, tp.y - 8, 1, color, {
-              vx: (Math.random() - 0.5) * 18,
-              vy: -15 - Math.random() * 25,
-              maxLife: 0.6 + Math.random() * 0.5,
-              size: 1 + Math.random() * 1.5,
-              alpha: 0.8,
-            });
-          }
           particleSystemRef.current.draw();
         }
         if (pulseSysRef.current) {
@@ -426,56 +271,14 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Build tile texture map from the spritesheet ──────────────────────────
-  function buildTileTextures(base: Texture, map: Map<string, Texture>) {
-    const src = base.source;
-    const makeKey = (rect: Rectangle) => `${rect.x}_${rect.y}_${rect.width}_${rect.height}`;
-
-    const allRects: Rectangle[] = [
-      ...TILE_DEFS.floorStone,
-      ...TILE_DEFS.floorWood,
-      ...TILE_DEFS.floorBrick,
-      ...TILE_DEFS.floorGold,
-      ...TILE_DEFS.wallMid,
-      ...TILE_DEFS.wallTop,
-      TILE_DEFS.wallLeft,
-      TILE_DEFS.wallRight,
-      TILE_DEFS.pillar,
-      ...TILE_DEFS.corridorFloor,
-    ];
-
-    for (const rect of allRects) {
-      const key = makeKey(rect);
-      if (!map.has(key)) {
-        const tex = new Texture({ source: src, frame: rect });
-        map.set(key, tex);
-      }
-    }
-  }
-
-  function getTileTex(rect: Rectangle): Texture {
-    const key = `${rect.x}_${rect.y}_${rect.width}_${rect.height}`;
-    return tileTexturesRef.current.get(key) ?? Texture.EMPTY;
-  }
-
   // ── Build the dungeon scene ───────────────────────────────────────────────
-  function buildDungeon(app: Application, world: Container, _tileset: Texture) {
-    // Premium background — deep space void with subtle nebula gradients
+  function buildDungeon(_app: Application, world: Container) {
+    // Pure dark void background
     const bg = new Graphics();
-    bg.rect(0, 0, CANVAS_W, CANVAS_H).fill(0x020408);
+    bg.rect(0, 0, CANVAS_W, CANVAS_H).fill(0x050508);
     world.addChild(bg);
 
-    // Space nebula atmosphere — subtle background gradients
-    const nebula = new Graphics();
-    // Deep purple-blue nebula center
-    nebula.circle(CANVAS_W * 0.5, CANVAS_H * 0.4, CANVAS_W * 0.7).fill({ color: 0x0a0520, alpha: 0.8 });
-    // Ember glow at top
-    nebula.ellipse(CANVAS_W * 0.5, 0, CANVAS_W * 0.6, CANVAS_H * 0.3).fill({ color: 0x1a0800, alpha: 0.5 });
-    // Arcane glow at bottom-left
-    nebula.circle(-20, CANVAS_H * 0.8, CANVAS_W * 0.35).fill({ color: 0x0a0520, alpha: 0.35 });
-    world.addChild(nebula);
-
-    // Draw corridors first (below rooms)
+    // Draw corridors (simple dark lines)
     const corridorLayer = new Container();
     world.addChild(corridorLayer);
     drawCorridors(corridorLayer);
@@ -490,7 +293,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       roomCont.label = room.id;
       roomContainersRef.current.set(room.id, roomCont);
       roomLayer.addChild(roomCont);
-      buildRoom(app, roomCont, room);
+      buildRoom(roomCont, room);
     }
 
     // Glow overlay layer
@@ -511,126 +314,178 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     drawRoomLabels(labelLayer);
   }
 
-  // ── Draw a single room ────────────────────────────────────────────────────
-  function buildRoom(_app: Application, container: Container, room: typeof ROOMS[0]) {
+  // ── Draw a room with layered procedural sci-fi dressing ───────────────────
+  function buildRoom(container: Container, room: typeof ROOMS[0]) {
     const { px, py, w, h } = roomPixelBounds(room);
+    const roomColor = ROOM_COLORS[room.id] ?? 0x888888;
+    const panelInset = 10;
 
-    // ── Try to use custom isometric background image ───────────────────────
-    const bgTex = roomBgTexturesRef.current.get(room.id);
-    if (bgTex) {
-      // Dark base fill
-      const base = new Graphics();
-      base.rect(px, py, w, h).fill(0x050308);
-      container.addChild(base);
+    const bg = new Graphics();
+    bg.label = 'room_bg';
+    bg.rect(px, py, w, h).fill({ color: 0x0d1118 });
+    bg.rect(px + 4, py + 4, w - 8, h - 8).fill({ color: 0x141a24 });
+    bg.rect(px, py, w, h).fill({ color: roomColor, alpha: 0.08 });
+    container.addChild(bg);
 
-      // Scale the background image to exactly fill the room tile area
-      const bgSprite = new Sprite(bgTex);
-      bgSprite.x = px;
-      bgSprite.y = py;
-      bgSprite.width = w;
-      bgSprite.height = h;
-      bgSprite.alpha = 0.90;
-      container.addChild(bgSprite);
+    const floor = new Graphics();
+    floor.label = 'room_floor';
+    floor.rect(px + panelInset, py + panelInset, w - panelInset * 2, h - panelInset * 2).fill({ color: 0x101722 });
+    for (let gx = px + panelInset; gx < px + w - panelInset; gx += 24) {
+      floor.moveTo(gx, py + panelInset);
+      floor.lineTo(gx, py + h - panelInset);
+    }
+    for (let gy = py + panelInset; gy < py + h - panelInset; gy += 24) {
+      floor.moveTo(px + panelInset, gy);
+      floor.lineTo(px + w - panelInset, gy);
+    }
+    floor.stroke({ color: 0x243244, alpha: 0.65, width: 1 });
 
-      // Subtle dark vignette at room edges for clean transitions
-      const vignette = new Graphics();
-      const edgeSize = 6;
-      const vAlpha = 0.5;
-      vignette.rect(px, py, w, edgeSize).fill({ color: 0x000000, alpha: vAlpha });
-      vignette.rect(px, py + h - edgeSize, w, edgeSize).fill({ color: 0x000000, alpha: vAlpha });
-      vignette.rect(px, py, edgeSize, h).fill({ color: 0x000000, alpha: vAlpha });
-      vignette.rect(px + w - edgeSize, py, edgeSize, h).fill({ color: 0x000000, alpha: vAlpha });
-      container.addChild(vignette);
-    } else {
-      // ── Fallback: procedural tile rendering ──────────────────────────────
-      const floorTiles = getFloorTiles(room.floorType);
-      const wallMids = TILE_DEFS.wallMid;
-      const scale = TILE_SIZE / T; // 3.0
-
-      for (let gy = -1; gy <= room.heightTiles; gy++) {
-        for (let gx = -1; gx <= room.widthTiles; gx++) {
-          const isInterior = gx >= 0 && gx < room.widthTiles && gy >= 0 && gy < room.heightTiles;
-          const tpx = px + gx * TILE_SIZE;
-          const tpy = py + gy * TILE_SIZE;
-
-          if (isInterior) {
-            const rect = pickTile(floorTiles, room.gridX + gx, room.gridY + gy);
-            const sp = new Sprite(getTileTex(rect));
-            sp.x = tpx;
-            sp.y = tpy;
-            sp.scale.set(scale);
-            container.addChild(sp);
-          } else {
-            const wallRect = pickTile(wallMids, room.gridX + gx, room.gridY + gy);
-            const sp = new Sprite(getTileTex(wallRect));
-            sp.x = tpx;
-            sp.y = tpy;
-            sp.scale.set(scale);
-            sp.tint = 0xaaaaaa;
-            container.addChild(sp);
-          }
-        }
+    for (let gx = px + panelInset + 12; gx < px + w - panelInset; gx += 48) {
+      for (let gy = py + panelInset + 12; gy < py + h - panelInset; gy += 48) {
+        floor.rect(gx - 6, gy - 6, 12, 12).stroke({ color: roomColor, alpha: 0.18, width: 1 });
       }
     }
+    container.addChild(floor);
 
-    // Premium room border system — multi-layer glow frame
-    const border = new Graphics();
-    border.label = 'border';
-    const roomColor = ROOM_COLORS[room.id] ?? 0x888888;
+    const roomDetails = new Graphics();
+    roomDetails.label = 'room_details';
 
-    // Outer glow frame (wide, subtle)
-    border
-      .rect(px - 3, py - 3, w + 6, h + 6)
-      .stroke({ color: roomColor, alpha: 0.12, width: 4 });
-    // Main border
-    border
-      .rect(px, py, w, h)
-      .stroke({ color: roomColor, alpha: 0.45, width: 1.5 });
-    // Inner highlight line
-    border
-      .rect(px + 2, py + 2, w - 4, h - 4)
-      .stroke({ color: 0xffffff, alpha: 0.04, width: 1 });
+    const drawConsoleBank = (x: number, y: number, width: number, height: number, glowAlpha = 0.22) => {
+      roomDetails.roundRect(x, y, width, height, 6).fill({ color: 0x1a202b });
+      roomDetails.roundRect(x + 4, y + 4, width - 8, height - 8, 4).fill({ color: 0x0b0f14 });
+      roomDetails.roundRect(x + 8, y + 8, width - 16, height - 16, 3).fill({ color: roomColor, alpha: glowAlpha });
+      roomDetails.roundRect(x, y, width, height, 6).stroke({ color: 0x3b4a5f, alpha: 0.8, width: 1.5 });
+    };
 
-    // Corner accent brackets (sci-fi style)
-    const bracketLen = Math.min(14, w * 0.12);
-    const bracketWidth = 2;
-    const alpha = 0.85;
-    // Top-left
-    border.rect(px - 1, py - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
-    border.rect(px - 1, py - 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
-    // Top-right
-    border.rect(px + w - bracketLen + 1, py - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
-    border.rect(px + w - 1, py - 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
-    // Bottom-left
-    border.rect(px - 1, py + h - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
-    border.rect(px - 1, py + h - bracketLen + 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
-    // Bottom-right
-    border.rect(px + w - bracketLen + 1, py + h - 1, bracketLen, bracketWidth).fill({ color: roomColor, alpha });
-    border.rect(px + w - 1, py + h - bracketLen + 1, bracketWidth, bracketLen).fill({ color: roomColor, alpha });
+    const drawServerRack = (x: number, y: number, width: number, height: number) => {
+      roomDetails.roundRect(x, y, width, height, 5).fill({ color: 0x151a22 });
+      roomDetails.roundRect(x, y, width, height, 5).stroke({ color: 0x56657a, alpha: 0.75, width: 1.5 });
+      for (let yy = y + 8; yy < y + height - 6; yy += 10) {
+        roomDetails.rect(x + 5, yy, width - 10, 3).fill({ color: roomColor, alpha: 0.18 });
+        roomDetails.circle(x + width - 8, yy + 1.5, 1.2).fill({ color: 0x7df7ff, alpha: 0.8 });
+      }
+    };
 
-    container.addChild(border);
+    const drawPipeRun = (x1: number, y1: number, x2: number, y2: number) => {
+      roomDetails.moveTo(x1, y1);
+      roomDetails.lineTo(x2, y2);
+      roomDetails.stroke({ color: 0x596777, alpha: 0.9, width: 4 });
+      roomDetails.moveTo(x1, y1 + 2);
+      roomDetails.lineTo(x2, y2 + 2);
+      roomDetails.stroke({ color: roomColor, alpha: 0.18, width: 1 });
+    };
 
-    // Enhanced torch positions — four corners + mid-wall accent
-    const torchPositions = [
-      { x: px + 10, y: py + 10 },
-      { x: px + w - 10, y: py + 10 },
-      { x: px + 10, y: py + h - 10 },
-      { x: px + w - 10, y: py + h - 10 },
-    ];
+    const drawCrate = (x: number, y: number, size: number) => {
+      roomDetails.rect(x, y, size, size).fill({ color: 0x221b12 });
+      roomDetails.rect(x, y, size, size).stroke({ color: 0x6f5331, alpha: 0.8, width: 1.2 });
+      roomDetails.moveTo(x + 4, y + 4);
+      roomDetails.lineTo(x + size - 4, y + size - 4);
+      roomDetails.moveTo(x + size - 4, y + 4);
+      roomDetails.lineTo(x + 4, y + size - 4);
+      roomDetails.stroke({ color: 0xa57940, alpha: 0.5, width: 1 });
+    };
 
-    for (const tp of torchPositions) {
-      drawTorch(container, tp.x, tp.y, ROOM_COLORS[room.id] ?? 0xFF8800);
+    const drawPortalRing = (cx: number, cy: number, r: number) => {
+      roomDetails.circle(cx, cy, r).stroke({ color: 0x364052, alpha: 0.8, width: 5 });
+      roomDetails.circle(cx, cy, r - 6).stroke({ color: roomColor, alpha: 0.35, width: 2 });
+      roomDetails.circle(cx, cy, r - 12).stroke({ color: 0x7df7ff, alpha: 0.2, width: 1 });
+    };
+
+    drawPipeRun(px + 18, py + 18, px + w - 18, py + 18);
+    drawPipeRun(px + 18, py + h - 18, px + w - 18, py + h - 18);
+    drawPipeRun(px + 18, py + 18, px + 18, py + h - 18);
+    drawPipeRun(px + w - 18, py + 18, px + w - 18, py + h - 18);
+
+    switch (room.id) {
+      case 'grim':
+        drawConsoleBank(px + 24, py + 22, 52, 24, 0.26);
+        drawConsoleBank(px + w - 76, py + 24, 48, 20, 0.24);
+        roomDetails.roundRect(px + w / 2 - 22, py + h - 62, 44, 24, 7).fill({ color: 0x24180f });
+        roomDetails.roundRect(px + w / 2 - 16, py + h - 72, 32, 16, 5).fill({ color: 0x3c2a16 });
+        drawPortalRing(px + 42, py + h - 42, 16);
+        break;
+      case 'bob':
+        drawConsoleBank(px + 20, py + 24, 46, 18, 0.18);
+        drawServerRack(px + w - 54, py + 22, 28, 74);
+        drawCrate(px + 26, py + h - 52, 18);
+        drawCrate(px + 48, py + h - 46, 14);
+        break;
+      case 'kevin':
+        drawServerRack(px + 22, py + 20, 24, 78);
+        drawConsoleBank(px + 56, py + 28, 58, 20, 0.26);
+        drawConsoleBank(px + 58, py + h - 46, 52, 16, 0.18);
+        roomDetails.circle(px + w - 34, py + h - 42, 12).stroke({ color: 0xff8844, alpha: 0.45, width: 3 });
+        roomDetails.circle(px + w - 34, py + h - 42, 5).fill({ color: 0xff8844, alpha: 0.18 });
+        break;
+      case 'agnes':
+        drawConsoleBank(px + 22, py + 24, 54, 18, 0.20);
+        roomDetails.roundRect(px + 28, py + h - 58, 64, 26, 6).fill({ color: 0x231528 });
+        roomDetails.roundRect(px + 34, py + h - 52, 52, 14, 4).fill({ color: 0xff66aa, alpha: 0.18 });
+        roomDetails.circle(px + w - 38, py + 42, 14).fill({ color: 0xffffff, alpha: 0.06 });
+        roomDetails.circle(px + w - 38, py + 42, 10).stroke({ color: 0xff66aa, alpha: 0.3, width: 2 });
+        break;
+      case 'stuart':
+        drawConsoleBank(px + 22, py + 22, 48, 18, 0.16);
+        drawCrate(px + w - 52, py + h - 50, 20);
+        drawCrate(px + w - 78, py + h - 44, 14);
+        roomDetails.rect(px + w / 2 - 18, py + h / 2 - 18, 36, 36).stroke({ color: 0xffd86b, alpha: 0.35, width: 2 });
+        roomDetails.circle(px + w / 2, py + h / 2, 6).fill({ color: 0xffd86b, alpha: 0.2 });
+        break;
     }
 
-    // Make room interactive
-    // We'll handle click/hover at the world level via hit-test
+    container.addChild(roomDetails);
+
+    const ambient = new Graphics();
+    ambient.label = 'room_ambient';
+    ambient.rect(px + 12, py + 12, w - 24, 14).fill({ color: roomColor, alpha: 0.06 });
+    ambient.rect(px + 12, py + h - 26, w - 24, 10).fill({ color: roomColor, alpha: 0.04 });
+    ambient.circle(px + w * 0.25, py + h * 0.3, 26).fill({ color: roomColor, alpha: 0.035 });
+    ambient.circle(px + w * 0.74, py + h * 0.66, 32).fill({ color: roomColor, alpha: 0.03 });
+    container.addChild(ambient);
+
+    if (room.backgroundImage) {
+      Assets.load(room.backgroundImage).then((texture) => {
+        const sprite = new Sprite(texture);
+        sprite.label = 'room_image';
+        sprite.x = px;
+        sprite.y = py;
+        sprite.width = w;
+        sprite.height = h;
+        sprite.alpha = 0.28;
+        container.addChildAt(sprite, 1);
+
+        const tint = new Graphics();
+        tint.label = 'room_image_tint';
+        tint.rect(px, py, w, h).fill({ color: roomColor, alpha: 0.06 });
+        container.addChildAt(tint, 2);
+      }).catch(() => {
+        console.warn(`[DungeonMap] Failed to load room image: ${room.backgroundImage}`);
+      });
+    }
+
+    const border = new Graphics();
+    border.label = 'border';
+    border.rect(px, py, w, h).stroke({ color: roomColor, alpha: 1.0, width: 4 });
+    border.rect(px - 4, py - 4, w + 8, h + 8).stroke({ color: roomColor, alpha: 0.35, width: 5 });
+    border.rect(px - 8, py - 8, w + 16, h + 16).stroke({ color: roomColor, alpha: 0.20, width: 6 });
+    const bLen = 20;
+    const bW = 3;
+    border.rect(px - 2, py - 2, bLen, bW).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px - 2, py - 2, bW, bLen).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px + w - bLen + 2, py - 2, bLen, bW).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px + w - 1, py - 2, bW, bLen).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px - 2, py + h - 1, bLen, bW).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px - 2, py + h - bLen + 2, bW, bLen).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px + w - bLen + 2, py + h - 1, bLen, bW).fill({ color: roomColor, alpha: 1.0 });
+    border.rect(px + w - 1, py + h - bLen + 2, bW, bLen).fill({ color: roomColor, alpha: 1.0 });
+    container.addChild(border);
+
     const hitArea = new Graphics();
     hitArea.label = `hit_${room.id}`;
     hitArea.rect(px, py, w, h).fill({ color: 0xffffff, alpha: 0.001 });
     hitArea.interactive = true;
     hitArea.cursor = 'pointer';
     hitArea.on('pointerup', () => {
-      // Only fire room select if NOT dragging
       if (!isDraggingRef.current) {
         onRoomClick(room.id as AgentId);
       }
@@ -648,9 +503,9 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     container.addChild(hitArea);
   }
 
-  // ── Draw corridors ────────────────────────────────────────────────────────
+  // ── Draw corridors — simple dark filled rectangles ────────────────────────
   function drawCorridors(layer: Container) {
-    const scale = TILE_SIZE / T;
+    const corridorGraphics = new Graphics();
 
     for (const seg of CORRIDORS) {
       const { x, y, length, direction, width: segWidth } = seg;
@@ -658,124 +513,51 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const tilesX = direction === 'h' ? length : segWidth;
       const tilesY = direction === 'v' ? length : segWidth;
 
-      for (let gy = 0; gy < tilesY; gy++) {
-        for (let gx = 0; gx < tilesX; gx++) {
-          const tgx = x + gx;
-          const tgy = y + gy;
-          const px2 = tgx * TILE_SIZE;
-          const py2 = tgy * TILE_SIZE;
+      const px2 = x * TILE_SIZE;
+      const py2 = y * TILE_SIZE;
+      const pw = tilesX * TILE_SIZE;
+      const ph = tilesY * TILE_SIZE;
 
-          const rect = pickTile(TILE_DEFS.corridorFloor, tgx, tgy);
-          const sp = new Sprite(getTileTex(rect));
-          sp.x = px2;
-          sp.y = py2;
-          sp.scale.set(scale);
-          sp.tint = 0x888899;
-          layer.addChild(sp);
-        }
-      }
+      // Dark corridor — slightly lighter than void
+      corridorGraphics.rect(px2, py2, pw, ph).fill({ color: 0x0a0c12, alpha: 1.0 });
+      // Subtle edge line
+      corridorGraphics.rect(px2, py2, pw, ph).stroke({ color: 0x1a2030, alpha: 0.4, width: 1 });
     }
+
+    layer.addChild(corridorGraphics);
   }
 
-  // ── Draw a premium torch sprite ───────────────────────────────────────────
-  function drawTorch(container: Container, x: number, y: number, color: number) {
-    // Outer ambient glow (large, very soft)
-    const outerGlow = new Graphics();
-    outerGlow.circle(x, y, 28).fill({ color, alpha: 0.05 });
-    outerGlow.circle(x, y, 18).fill({ color, alpha: 0.08 });
-    container.addChild(outerGlow);
-
-    const g = new Graphics();
-    // Wall mount bracket
-    g.rect(x - 2, y + 1, 4, 3).fill({ color: 0x332211, alpha: 0.9 });
-    // Torch body
-    g.rect(x - 1.5, y - 5, 3, 7).fill({ color: 0x6B4423, alpha: 1 });
-    // Flame layers
-    g.circle(x, y - 5, 4).fill({ color, alpha: 0.85 });
-    g.circle(x, y - 7, 3).fill({ color: 0xFFCC44, alpha: 0.9 });
-    g.circle(x, y - 9, 2).fill({ color: 0xFFFF99, alpha: 0.95 });
-    container.addChild(g);
-
-    // Light halo (animated in updateLighting)
-    const halo = new Graphics();
-    halo.circle(x, y, 20).fill({ color, alpha: 0.0 });
-    halo.label = `torch_halo_${x}_${y}`;
-    container.addChild(halo);
-  }
-
-  // ── Draw a single room label — premium typography ────────────────────────
+  // ── Draw room label (name text at bottom of room, no emoji) ──────────────
   function drawSingleRoomLabel(layer: Container, room: Room, meta?: CustomRoomMeta) {
-    const { cx, cy } = roomCenter(room);
-    const { h } = roomPixelBounds(room);
-
-    const emoji = meta?.emoji ?? ROOM_EMOJIS[room.id] ?? '';
+    const { cx } = roomCenter(room);
+    const { py, h } = roomPixelBounds(room);
     const color = meta?.colorPixi ?? ROOM_COLORS[room.id] ?? 0xaaaaaa;
     const label = meta?.label ?? ROOM_LABELS[room.id] ?? room.label.toUpperCase();
 
-    // Emoji with drop-shadow glow
-    const emojiStyle = new TextStyle({
-      fontSize: 38,
-      fill: 0xffffff,
-      align: 'center',
-      dropShadow: { color: 0x000000, blur: 8, distance: 0, alpha: 0.8 },
-    });
-    const emojiText = new Text({ text: emoji, style: emojiStyle });
-    emojiText.anchor.set(0.5);
-    emojiText.x = cx;
-    emojiText.y = cy - 16;
-    layer.addChild(emojiText);
-
     const labelStyle = new TextStyle({
-      fontSize: 12,
+      fontSize: 14,
       fill: color,
       fontFamily: '"Orbitron", "Share Tech Mono", "Courier New", monospace',
       letterSpacing: 3,
       fontWeight: 'bold',
       align: 'center',
-      dropShadow: { color: 0x000000, blur: 6, distance: 0, alpha: 1 },
+      dropShadow: { color: 0x000000, blur: 8, distance: 0, alpha: 1 },
     });
     const labelText = new Text({ text: label, style: labelStyle });
+    labelText.alpha = 0.90;
     labelText.anchor.set(0.5);
     labelText.x = cx;
-    labelText.y = cy + h / 2 - 14;
+    labelText.y = py + h - 14;
     layer.addChild(labelText);
   }
 
   function drawRoomLabels(layer: Container) {
     for (const room of ROOMS) {
-      const { cx, cy } = roomCenter(room);
-      const { h } = roomPixelBounds(room);
-
-      const emojiStyle = new TextStyle({
-        fontSize: 38,
-        fill: 0xffffff,
-        align: 'center',
-        dropShadow: { color: 0x000000, blur: 8, distance: 0, alpha: 0.8 },
-      });
-      const emojiText = new Text({ text: ROOM_EMOJIS[room.id] ?? '', style: emojiStyle });
-      emojiText.anchor.set(0.5);
-      emojiText.x = cx;
-      emojiText.y = cy - 16;
-      layer.addChild(emojiText);
-
-      const labelStyle = new TextStyle({
-        fontSize: 12,
-        fill: ROOM_COLORS[room.id] ?? 0xaaaaaa,
-        fontFamily: '"Orbitron", "Share Tech Mono", "Courier New", monospace',
-        letterSpacing: 3,
-        fontWeight: 'bold',
-        align: 'center',
-        dropShadow: { color: 0x000000, blur: 6, distance: 0, alpha: 1 },
-      });
-      const labelText = new Text({ text: ROOM_LABELS[room.id] ?? room.label.toUpperCase(), style: labelStyle });
-      labelText.anchor.set(0.5);
-      labelText.x = cx;
-      labelText.y = cy + h / 2 - 14;
-      layer.addChild(labelText);
+      drawSingleRoomLabel(layer, room);
     }
   }
 
-  // ── Update glow/selection effects — premium multi-layer ─────────────────
+  // ── Update glow/selection effects ─────────────────────────────────────────
   function updateGlowEffects(time: number) {
     const t = time / 1000;
 
@@ -791,52 +573,31 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       glow.clear();
 
-      // Passive ambient glow — every room breathes slightly
+      // Passive ambient breathe
       const breathe = 0.05 + 0.03 * Math.sin(t * 0.8 + roomIdx * 1.2);
-      glow
-        .rect(px - 8, py - 8, w + 16, h + 16)
-        .stroke({ color, alpha: breathe, width: 6 });
+      glow.rect(px - 6, py - 6, w + 12, h + 12).stroke({ color, alpha: breathe, width: 5 });
 
       if (isSelected) {
-        // Multi-layer pulsing selection glow
         const pulse = 0.45 + 0.35 * Math.sin(t * 2.8);
         const pulse2 = 0.3 + 0.2 * Math.sin(t * 2.8 + 0.5);
 
-        // Outermost soft halo
-        glow
-          .rect(px - 10, py - 10, w + 20, h + 20)
-          .stroke({ color, alpha: pulse * 0.25, width: 8 });
-        // Outer glow border
-        glow
-          .rect(px - 5, py - 5, w + 10, h + 10)
-          .stroke({ color, alpha: pulse * 0.6, width: 3 });
-        // Main selection border
-        glow
-          .rect(px - 1, py - 1, w + 2, h + 2)
-          .stroke({ color, alpha: 0.95, width: 2 });
-        // Inner shimmer
-        glow
-          .rect(px + 3, py + 3, w - 6, h - 6)
-          .stroke({ color, alpha: pulse2 * 0.4, width: 1 });
+        glow.rect(px - 10, py - 10, w + 20, h + 20).stroke({ color, alpha: pulse * 0.25, width: 8 });
+        glow.rect(px - 5, py - 5, w + 10, h + 10).stroke({ color, alpha: pulse * 0.6, width: 3 });
+        glow.rect(px - 1, py - 1, w + 2, h + 2).stroke({ color, alpha: 0.95, width: 2 });
+        glow.rect(px + 3, py + 3, w - 6, h - 6).stroke({ color, alpha: pulse2 * 0.4, width: 1 });
 
-        // Animated corner brackets — extend/contract
         const bLen = 16 + 4 * Math.sin(t * 2.8);
         const bW = 2.5;
         const bAlpha = 0.95;
-        // Top-left
         glow.rect(px - 3, py - 3, bLen, bW).fill({ color, alpha: bAlpha });
         glow.rect(px - 3, py - 3, bW, bLen).fill({ color, alpha: bAlpha });
-        // Top-right
         glow.rect(px + w - bLen + 3, py - 3, bLen, bW).fill({ color, alpha: bAlpha });
         glow.rect(px + w + 1, py - 3, bW, bLen).fill({ color, alpha: bAlpha });
-        // Bottom-left
         glow.rect(px - 3, py + h + 1, bLen, bW).fill({ color, alpha: bAlpha });
         glow.rect(px - 3, py + h - bLen + 3, bW, bLen).fill({ color, alpha: bAlpha });
-        // Bottom-right
         glow.rect(px + w - bLen + 3, py + h + 1, bLen, bW).fill({ color, alpha: bAlpha });
         glow.rect(px + w + 1, py + h - bLen + 3, bW, bLen).fill({ color, alpha: bAlpha });
 
-        // Center cross-hair scanline
         const { cx: rcx, cy: rcy } = roomCenter(room);
         const scanAlpha = 0.06 + 0.04 * Math.sin(t * 3.5);
         glow.rect(px, rcy - 0.5, w, 1).fill({ color, alpha: scanAlpha });
@@ -844,13 +605,8 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
 
       } else if (isHovered) {
         const pulse = 0.3 + 0.2 * Math.sin(t * 3.2);
-        glow
-          .rect(px - 5, py - 5, w + 10, h + 10)
-          .stroke({ color, alpha: pulse * 0.55, width: 4 });
-        glow
-          .rect(px - 1, py - 1, w + 2, h + 2)
-          .stroke({ color, alpha: 0.65, width: 1.5 });
-        // Hover corner accents
+        glow.rect(px - 5, py - 5, w + 10, h + 10).stroke({ color, alpha: pulse * 0.55, width: 4 });
+        glow.rect(px - 1, py - 1, w + 2, h + 2).stroke({ color, alpha: 0.65, width: 1.5 });
         const hLen = 12;
         const hAlpha = 0.7;
         glow.rect(px - 2, py - 2, hLen, 2).fill({ color, alpha: hAlpha });
@@ -863,13 +619,11 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         glow.rect(px + w, py + h - hLen + 2, 2, hLen).fill({ color, alpha: hAlpha });
       }
 
-      // Agent status indicator — premium status dot
+      // Agent status dot
       const agent = agentsRef.current.find(a => a.id === room.id);
       if (agent?.status === 'active') {
         const statusPulse = 0.7 + 0.3 * Math.sin(t * 2.2 + roomIdx * 0.7);
-        // Outer glow ring
         glow.circle(px + w - 8, py + 8, 7).fill({ color: 0x00ff88, alpha: 0.15 });
-        // Status dot
         glow.circle(px + w - 8, py + 8, 4.5).fill({ color: 0x00ff88, alpha: statusPulse });
         glow.circle(px + w - 8, py + 8, 2.5).fill({ color: 0xaaffcc, alpha: statusPulse });
       } else if (agent?.status === 'error') {
@@ -877,82 +631,19 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         glow.circle(px + w - 8, py + 8, 7).fill({ color: 0xff3333, alpha: 0.2 });
         glow.circle(px + w - 8, py + 8, 4.5).fill({ color: 0xff3333, alpha: errorPulse });
       } else {
-        // Idle dot — very dim
         glow.circle(px + w - 8, py + 8, 3).fill({ color: 0x334455, alpha: 0.6 });
       }
     }
   }
 
-  // ── Update dynamic lighting — premium atmospheric fog + torch system ────
-  function updateLighting(time: number) {
+  // ── Lighting — no effects needed ──────────────────────────────────────────
+  function updateLighting(_time: number) {
     const lg = lightingLayerRef.current;
     if (!lg) return;
-
-    const t = time / 1000;
     lg.clear();
-
-    // ── Atmospheric base fog — 3-layer deep space dungeon darkness ──────
-    // Layer 1: very deep void baseline
-    lg.rect(0, 0, CANVAS_W, CANVAS_H).fill({ color: 0x000000, alpha: 0.62 });
-
-    // Layer 2: Room area light pools — SUBTRACTED from darkness
-    // Each room gets a soft ambient light pool centered on it
-    for (const room of ROOMS) {
-      const color = ROOM_COLORS[room.id] ?? 0xff8800;
-      const { cx, cy, } = roomCenter(room);
-      const { w, h } = roomPixelBounds(room);
-      const roomBreath = 0.04 + 0.025 * Math.sin(t * 0.6 + ROOMS.indexOf(room) * 0.9);
-
-      // Soft room ambient pool
-      lg.ellipse(cx, cy, w * 0.9, h * 0.8).fill({ color, alpha: roomBreath });
-
-      void color;
-    }
-
-    // Layer 3: Animated torch flicker lights
-    for (const room of ROOMS) {
-      const { px, py, w, h } = roomPixelBounds(room);
-      const torchPositions = [
-        { x: px + 10, y: py + 10 },
-        { x: px + w - 10, y: py + 10 },
-        { x: px + 10, y: py + h - 10 },
-        { x: px + w - 10, y: py + h - 10 },
-      ];
-      for (let i = 0; i < torchPositions.length; i++) {
-        const tp = torchPositions[i];
-        // Each torch flickers independently with different phase
-        const phase = tp.x * 0.13 + tp.y * 0.07 + i * 2.1;
-        const flicker1 = 0.18 + 0.09 * Math.sin(t * 5.3 + phase);
-        const flicker2 = 0.12 + 0.05 * Math.sin(t * 8.7 + phase + 1.1);
-        const flicker3 = 0.06 + 0.04 * Math.sin(t * 13.1 + phase + 2.3);
-
-        // Outer warm glow pool
-        lg.circle(tp.x, tp.y, 35 + 5 * Math.sin(t * 4.1 + phase)).fill({ color: 0xFF6600, alpha: flicker1 * 0.35 });
-        // Mid warm ring
-        lg.circle(tp.x, tp.y, 22 + 3 * Math.sin(t * 5.3 + phase)).fill({ color: 0xFF8800, alpha: flicker1 });
-        // Bright torch core
-        lg.circle(tp.x, tp.y, 12).fill({ color: 0xFFAA33, alpha: flicker2 + 0.2 });
-        // Flame highlight
-        lg.circle(tp.x, tp.y - 6, 6).fill({ color: 0xFFFF88, alpha: flicker3 + 0.1 });
-      }
-    }
-
-    // Layer 4: Corridor veil — corridors are darker than rooms
-    // (corridors occupy the gaps between rooms; adding a uniform dark wash)
-    // Layer 5: Vignette — edges of canvas fade to pure black
-    const vigW = CANVAS_W;
-    const vigH = CANVAS_H;
-    // Top edge
-    lg.rect(0, 0, vigW, vigH * 0.15).fill({ color: 0x000000, alpha: 0.4 });
-    // Bottom edge
-    lg.rect(0, vigH * 0.85, vigW, vigH * 0.15).fill({ color: 0x000000, alpha: 0.35 });
-    // Left edge
-    lg.rect(0, 0, vigW * 0.08, vigH).fill({ color: 0x000000, alpha: 0.45 });
-    // Right edge
-    lg.rect(vigW * 0.92, 0, vigW * 0.08, vigH).fill({ color: 0x000000, alpha: 0.4 });
   }
 
-  // ── Update agent sprites in their room containers ────────────────────────
+  // ── Update agent sprites — only Agnes ────────────────────────────────────
   function updateAgentSprites(timeSec: number) {
     for (const room of ROOMS) {
       const sc = spriteContainersRef.current.get(room.id);
@@ -961,13 +652,10 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       const status = agent?.status ?? 'idle';
       const selected = selectedIdRef.current === room.id;
       const { cx, cy } = roomCenter(room);
-      switch (room.id) {
-        case 'grim':   drawGrimSprite(sc, cx, cy, timeSec, status, selected); break;
-        case 'bob':    drawBobSprite(sc, cx, cy, timeSec, status, selected); break;
-        case 'kevin':  drawKevinSprite(sc, cx, cy, timeSec, status, selected); break;
-        case 'stuart': drawStuartSprite(sc, cx, cy, timeSec, status, selected); break;
-        case 'agnes':  drawAgnesSprite(sc, cx, cy, timeSec, status, selected); break;
+      if (room.id === 'agnes') {
+        drawAgnesSprite(sc, cx, cy, timeSec, status, selected);
       }
+      // All other agents: no sprite
     }
   }
 
@@ -987,26 +675,20 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
   function setupInteraction(app: Application) {
     const canvas = app.canvas;
 
-    // Wheel zoom
     canvas.addEventListener('wheel', (e: WheelEvent) => {
       e.preventDefault();
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoomRef.current * zoomFactor));
-
-      // Zoom toward cursor
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-
       const worldX = (mx - targetPanXRef.current) / targetZoomRef.current;
       const worldY = (my - targetPanYRef.current) / targetZoomRef.current;
-
       targetZoomRef.current = newZoom;
       targetPanXRef.current = mx - worldX * newZoom;
       targetPanYRef.current = my - worldY * newZoom;
     }, { passive: false });
 
-    // Mouse drag for panning
     canvas.addEventListener('mousedown', (e: MouseEvent) => {
       dragStartRef.current = { x: e.clientX, y: e.clientY, panX: targetPanXRef.current, panY: targetPanYRef.current };
       totalDragRef.current = 0;
@@ -1026,14 +708,12 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       }
     });
 
-    // Listen on window so mouseup fires even if cursor leaves canvas
     window.addEventListener('mouseup', () => {
       dragStartRef.current = null;
       isDraggingRef.current = false;
       totalDragRef.current = 0;
     });
 
-    // Double-click to reset
     canvas.addEventListener('dblclick', () => {
       const W = canvasSizeRef.current.w;
       const H = canvasSizeRef.current.h;
@@ -1044,7 +724,6 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
       targetPanYRef.current = (H - CANVAS_H * zoom) / 2;
     });
 
-    // Touch zoom/pan
     let lastTouchDist = 0;
     canvas.addEventListener('touchstart', (e: TouchEvent) => {
       if (e.touches.length === 2) {
@@ -1082,81 +761,6 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
     }, { passive: false });
   }
 
-  // ── Fallback: create procedural tile textures when tileset fails ──────────
-  function createFallbackTileTexture(_app: Application): Texture {
-    // Create a 512x512 canvas with procedural tiles
-    const offscreen = document.createElement('canvas');
-    offscreen.width = 512;
-    offscreen.height = 512;
-    const ctx = offscreen.getContext('2d')!;
-
-    // Fill with dark base
-    ctx.fillStyle = '#1a1e22';
-    ctx.fillRect(0, 0, 512, 512);
-
-    // Draw 32x32 grid of tile variants
-    for (let row = 0; row < 32; row++) {
-      for (let col = 0; col < 32; col++) {
-        const x = col * T;
-        const y = row * T;
-        drawProceduralTile(ctx, x, y, row, col);
-      }
-    }
-
-    return Texture.from(offscreen);
-  }
-
-  function drawProceduralTile(ctx: CanvasRenderingContext2D, x: number, y: number, row: number, col: number) {
-    const seed = row * 97 + col * 1303;
-    const s = T;
-
-    if (row >= 6 && row <= 9) {
-      // Floor tiles — deep space dungeon palette
-      const palettes: string[][] = [
-        ['#161c26', '#121720', '#0e131c'],  // deep void stone (row 6)
-        ['#1a1510', '#16120d', '#12100a'],  // dark ancient wood (row 7)
-        ['#180c0a', '#150b08', '#120a06'],  // deep crimson brick (row 8)
-        ['#111005', '#131103', '#151204'],  // ancient gold stone (row 9)
-      ];
-      const palette = palettes[Math.min(row - 6, 3)];
-      const shade = palette[Math.floor(seededRand(seed) * palette.length)];
-      ctx.fillStyle = shade;
-      ctx.fillRect(x, y, s, s);
-      // Subtle grid lines
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
-    } else if (row >= 1 && row <= 5) {
-      // Wall tiles
-      ctx.fillStyle = `hsl(210, 10%, ${18 + seededRand(seed) * 8}%)`;
-      ctx.fillRect(x, y, s, s);
-      // Brick divisions
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(x, y + s / 2, s, 1);
-      if (row % 2 === 0) {
-        ctx.fillRect(x + s / 2, y, 1, s / 2);
-        ctx.fillRect(x, y + s / 2, 1, s / 2);
-      } else {
-        ctx.fillRect(x, y, 1, s / 2);
-        ctx.fillRect(x + s / 2, y + s / 2, 1, s / 2);
-      }
-    } else {
-      // Other tiles (chars etc.) — just dark
-      ctx.fillStyle = '#080a0c';
-      ctx.fillRect(x, y, s, s);
-    }
-  }
-
-  // ── Get floor tile variants for a floor type ──────────────────────────────
-  function getFloorTiles(floorType: string): Rectangle[] {
-    switch (floorType) {
-      case 'sand':  return TILE_DEFS.floorWood;
-      case 'brick': return TILE_DEFS.floorBrick;
-      case 'gold':  return TILE_DEFS.floorGold;
-      default:      return TILE_DEFS.floorStone;
-    }
-  }
-
   // ── Handle window resize ──────────────────────────────────────────────────
   useEffect(() => {
     const handleResize = () => {
@@ -1180,7 +784,7 @@ export function DungeonMapPixi({ agents, selectedId, onRoomClick, onRoomHover, p
         height: '100%',
         overflow: 'hidden',
         cursor: isDraggingRef.current ? 'grabbing' : 'default',
-        background: '#020408',
+        background: '#050508',
       }}
     />
   );

@@ -16,8 +16,8 @@ import type { NewAgentData } from './components/AddAgentModal';
 import { useGateway } from './hooks/useGateway';
 import type { AgentId, AgentInfo, ActivityEntry } from './types';
 import { DEFAULT_AGENT_IDS } from './types';
-import { ActivityTicker } from './components/ActivityTicker';
 import { ToastStack } from './components/ToastStack';
+import { ActivityTicker } from './components/ActivityTicker';
 import { useNotifications } from './hooks/useNotifications';
 import { ROOMS, getNextRoomPosition } from './dungeon/rooms';
 import type { Room } from './types';
@@ -249,7 +249,7 @@ function App() {
     }));
     return [...INITIAL_AGENTS, ...customAgentInfos];
   });
-  // globalLog: wired to ActivityTicker for bottom-of-screen live feed
+  // globalLog: live feed for future use
   const [globalLog, setGlobalLog] = useState<ActivityEntry[]>(INITIAL_LOG);
   // Multi-window state: track open windows and their z-order
   const [openWindowIds, setOpenWindowIds] = useState<AgentId[]>([]);
@@ -808,7 +808,7 @@ function App() {
           />
 
           {/* Map container */}
-          <div className="dungeon-map-wrap">
+          <div className="dungeon-map-wrap" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <div className="dungeon-map-canvas-wrap" style={{ position: 'relative' }}>
               <DungeonMapPixi
                 agents={agents}
@@ -830,8 +830,9 @@ function App() {
           </div>
         </div>
 
-        {/* Activity Ticker — always-visible bottom chronicle feed */}
+        {/* Activity Chronicle Ticker — bottom of screen */}
         <ActivityTicker entries={globalLog} />
+
       </div>
 
       {/* Floating room panels — one per open window, non-blocking */}

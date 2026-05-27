@@ -43,6 +43,7 @@ export interface Room {
   widthTiles: number;
   heightTiles: number;
   floorType: 'stone' | 'sand' | 'brick' | 'gold';
+  backgroundImage?: string;
 }
 
 export interface Torch {

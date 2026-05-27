@@ -10,6 +10,7 @@ const isTauri = !!host || !!process.env.TAURI_ENV_TARGET_TRIPLE;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  base: './',
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
